@@ -15,15 +15,8 @@ namespace Filee.App.Services;
 /// <summary>JSON based localization with live language switching.</summary>
 public sealed class LocalizationService : ILocalizer
 {
-    /// <summary>Languages shipped with Filee: code → native name (shown in the language picker).</summary>
-    public static readonly IReadOnlyList<(string Code, string NativeName)> Languages =
-    [
-        ("en", "English"),
-        ("es", "Español"),
-        ("ko", "한국어"),
-        ("zh-CN", "简体中文"),
-        ("pl", "Polski"),
-    ];
+    /// <summary>Languages shipped with Easy: code → native name. English only; other files fall back to it.</summary>
+    public static readonly IReadOnlyList<(string Code, string NativeName)> Languages = [("en", "English")];
 
     private readonly ResourceDictionary _resources = new();
     private readonly Dictionary<string, string> _english;
@@ -86,25 +79,8 @@ public sealed class LocalizationService : ILocalizer
         LanguageChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Maps "auto" / a culture name to one of the shipped languages.</summary>
-    public static string Resolve(string setting)
-    {
-        if (!string.Equals(setting, "auto", StringComparison.OrdinalIgnoreCase) &&
-            Languages.Any(l => l.Code.Equals(setting, StringComparison.OrdinalIgnoreCase)))
-            return Languages.First(l => l.Code.Equals(setting, StringComparison.OrdinalIgnoreCase)).Code;
-
-        // macOS gives an app started from Finder no LANG: its language list comes from the system instead.
-        var ui = Filee.Platform.MacOS.MacOSLocale.PreferredLanguage() ?? CultureInfo.InstalledUICulture.Name;
-        if (ui.StartsWith("ko", StringComparison.OrdinalIgnoreCase))
-            return "ko";
-        if (ui.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
-            return "zh-CN";
-        if (ui.StartsWith("pl", StringComparison.OrdinalIgnoreCase))
-            return "pl";
-        if (ui.StartsWith("es", StringComparison.OrdinalIgnoreCase))
-            return "es";
-        return "en";
-    }
+    /// <summary>Maps "auto" / a culture name to one of the shipped languages: always English in Easy.</summary>
+    public static string Resolve(string setting) => "en";
 
     /// <summary>
     /// Reads a translation file. Missing files yield an empty dictionary (English is used instead).

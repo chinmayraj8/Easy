@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace Filee.App.Tests;
 
-/// <summary>Keeps en / es / ko / zh-CN in sync so no language silently falls back to English.</summary>
+/// <summary>Easy ships one language, English: checks its file against the XAML and the rebrand.</summary>
 public partial class LocalizationTests
 {
     private static string I18nDirectory
@@ -20,28 +20,18 @@ public partial class LocalizationTests
     private static Dictionary<string, string> Load(string code) =>
         JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(Path.Combine(I18nDirectory, code + ".json")))!;
 
-    public static TheoryData<string> Languages => new() { "es", "ko", "zh-CN", "pl" };
-
-    [Theory]
-    [MemberData(nameof(Languages))]
-    public void Every_language_has_exactly_the_english_keys(string code)
+    [Fact]
+    public void English_is_the_only_language()
     {
-        var english = Load("en").Keys.ToHashSet();
-        var other = Load(code).Keys.ToHashSet();
-
-        Assert.Empty(english.Except(other));
-        Assert.Empty(other.Except(english));
+        Assert.Equal(["en.json"], Directory.GetFiles(I18nDirectory).Select(Path.GetFileName));
     }
 
-    [Theory]
-    [MemberData(nameof(Languages))]
-    public void Format_placeholders_match_english(string code)
+    /// <summary>Easy is a rebrand: only the attribution line may still name Filee.</summary>
+    [Fact]
+    public void No_string_shows_the_original_name_except_the_attribution()
     {
-        var english = Load("en");
-        foreach (var (key, value) in Load(code))
-            Assert.True(
-                Placeholders(english[key]).SetEquals(Placeholders(value)),
-                $"{code}:{key} placeholders differ from English");
+        var named = Load("en").Where(e => e.Value.Contains("Filee", StringComparison.Ordinal)).Select(e => e.Key);
+        Assert.Equal(["about.based_on"], named);
     }
 
     [Fact]
@@ -58,12 +48,6 @@ public partial class LocalizationTests
 
         Assert.Empty(missing);
     }
-
-    private static HashSet<string> Placeholders(string text) =>
-        PlaceholderPattern().Matches(text).Select(m => m.Value).ToHashSet();
-
-    [GeneratedRegex(@"\{\d+\}")]
-    private static partial Regex PlaceholderPattern();
 
     [GeneratedRegex(@"\{DynamicResource ([\w.]+)\}")]
     private static partial Regex DynamicResourceKey();

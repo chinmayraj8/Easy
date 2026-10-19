@@ -9,7 +9,7 @@ namespace Filee.App.Views.Pages;
 
 public partial class GeneralPage : UserControl
 {
-    private static readonly FilePickerFileType JsonType = new("Filee presets") { Patterns = ["*.json"] };
+    private static readonly FilePickerFileType JsonType = new("Easy presets") { Patterns = ["*.json"] };
 
     public GeneralPage() => InitializeComponent();
 

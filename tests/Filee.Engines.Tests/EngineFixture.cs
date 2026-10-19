@@ -14,7 +14,9 @@ public sealed class EngineFixture : IDisposable
     {
         Directory.CreateDirectory(Root);
         var env = new EngineEnvironment(Path.Combine(Root, "data"));
-        Converters = EngineRegistry.CreateAll(env);
+        // Easy: ONLYOFFICE is used when the Mac has it, which would change the built-in routes the other tests check;
+        // OnlyOfficeConverterTests adds it itself.
+        Converters = EngineRegistry.CreateAll(env).Where(c => c.Id != "onlyoffice").ToList();
         Catalog = new ConverterCatalog(Converters) { Priority = new AppSettings().EnginePriority };
     }
 

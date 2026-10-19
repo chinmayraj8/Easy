@@ -101,7 +101,7 @@ internal static class Program
         {
             // The window system has no display link for this screen: a Mac in a virtual machine without graphics
             // acceleration (VMware). Avalonia can't draw there; say so instead of quitting without a word.
-            StartupFailure.Report(ex, "Filee can't open its window on this Mac: macOS reports no display it can draw on. " +
+            StartupFailure.Report(ex, "Easy can't open its window on this Mac: macOS reports no display it can draw on. " +
                                       "This happens in virtual machines without graphics acceleration (such as VMware). " +
                                       "The filee command still works in Terminal.");
             return 1;

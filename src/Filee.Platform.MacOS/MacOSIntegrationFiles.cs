@@ -4,9 +4,12 @@ namespace Filee.Platform.MacOS;
 
 internal static class MacOSIntegrationFiles
 {
+    /// <summary>CFBundleIdentifier in installer/macos/Info.plist; the LaunchAgent and the service status use it too.</summary>
+    internal const string BundleId = "com.chinmayraj8.easy";
+
     internal static string LaunchAgent(string executablePath) => Plist(Dict(
-        ("Label", "com.filee.app"),
-        ("AssociatedBundleIdentifiers", Array("com.filee.app")),
+        ("Label", BundleId),
+        ("AssociatedBundleIdentifiers", Array(BundleId)),
         ("ProgramArguments", Array(executablePath, "--background")),
         ("LimitLoadToSessionType", "Aqua"),
         ("RunAtLoad", true),
@@ -17,7 +20,7 @@ internal static class MacOSIntegrationFiles
     /// defaults, which reads the key as a property list string.
     /// </summary>
     internal static string ServiceStatusKey =>
-        $"\"com.filee.app - {MacOSServicesProvider.MenuItem} - {MacOSServicesProvider.Message}\"";
+        $"\"{BundleId} - {MacOSServicesProvider.MenuItem} - {MacOSServicesProvider.Message}\"";
 
     /// <summary>On or off in the right-click menu and the Services menu, as System Settings writes it.</summary>
     internal static string ServiceStatus(bool enabled)

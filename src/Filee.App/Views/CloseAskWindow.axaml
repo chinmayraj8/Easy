@@ -3,7 +3,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Filee.App.Views.CloseAskWindow"
-        Title="Filee"
+        Title="Easy"
         Icon="avares://Filee/Assets/Icons/filee.ico"
         Width="440"
         SizeToContent="Height"

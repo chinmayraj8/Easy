@@ -31,8 +31,8 @@ public class ReleaseNotesTests
         var note = ReleaseNotes.Parse("1.10.3", Body);
 
         Assert.Equal(UpdateLevel.Required, note.Level);
-        Assert.Equal(["엑셀 페이지 나누기가 PDF에 반영돼요", "한글 수식이 제대로 나와요"], note.In("ko"));
-        Assert.Equal(["Excel 分页符会保留到 PDF 中"], note.In("zh-CN"));
+        Assert.Equal(["Excel page breaks carry over to PDF"], note.In("en"));
+        Assert.Equal(["Excel page breaks carry over to PDF"], note.In("ko")); // Easy ships English only
         Assert.Equal(["Excel page breaks carry over to PDF"], note.In("ja")); // no Japanese: English
     }
 
@@ -47,7 +47,7 @@ public class ReleaseNotesTests
             -->
             """);
 
-        Assert.Equal(["Język polski"], note.In("pl"));
+        Assert.Equal(["Polish translation"], note.In("pl")); // Easy ships English only
         Assert.Equal(["Polish translation"], note.In("xx")); // not a Filee language: English
     }
 
@@ -88,7 +88,7 @@ public class ReleaseNotesTests
         Assert.Equal("9.9.11", updates.LatestVersion);
         Assert.Equal(["9.9.11", "9.9.10"], updates.Notes.Select(n => n.Version));
         Assert.True(updates.IsRequired);
-        Assert.Contains("• 중요한 수정", UpdateTexts.Changes(updates, new KoreanOnly()));
+        Assert.DoesNotContain("중요한 수정", UpdateTexts.Changes(updates, new KoreanOnly())); // English only
     }
 
     private sealed class KoreanOnly : Filee.Core.Localization.ILocalizer

@@ -9,9 +9,9 @@ public class LocalizationResourceTests
     [AvaloniaFact]
     public void Strings_are_available_as_application_resources()
     {
-        TestServices.EnsureInitialized("ko");
+        TestServices.EnsureInitialized("en");
         Assert.True(Application.Current!.TryGetResource("home.title", null, out var value));
-        Assert.Equal("홈", value);
+        Assert.Equal("Home", value);
     }
 
     [AvaloniaFact]
@@ -24,8 +24,8 @@ public class LocalizationResourceTests
         window.Show();
         Assert.Equal("Home", text.Text);
 
-        TestServices.EnsureInitialized("ko");
-        Assert.Equal("홈", text.Text);
+        TestServices.EnsureInitialized("ko"); // Easy ships English only: another language falls back to it
+        Assert.Equal("Home", text.Text);
         window.Close();
     }
 }

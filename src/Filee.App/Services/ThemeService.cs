@@ -14,7 +14,7 @@ public sealed class ThemeService(IPlatformServices platform)
 {
     /// <summary>Accent swatches offered in the Theme page.</summary>
     public static readonly IReadOnlyList<string> Swatches =
-        ["#7F77DD", "#1D9E75", "#D85A30", "#378ADD", "#D4537E", "#BA7517", "#639922", "#5F5E5A"];
+        ["#14B8A6", "#7F77DD", "#1D9E75", "#D85A30", "#378ADD", "#D4537E", "#BA7517", "#639922", "#5F5E5A"];
 
     /// <summary>Embedded Noto fonts (see build/fetch-fonts.ps1). Missing files fall back to system fonts.</summary>
     private const string Latin = "fonts:Filee#Noto Sans";
@@ -35,7 +35,7 @@ public sealed class ThemeService(IPlatformServices platform)
         };
 
         // Accent colour + derived shades. Fluent controls read the System* keys.
-        var accent = Color.TryParse(theme.Accent, out var parsed) ? parsed : Color.Parse("#7F77DD");
+        var accent = Color.TryParse(theme.Accent, out var parsed) ? parsed : Color.Parse("#14B8A6");
         res["AccentColor"] = accent;
         res["AccentBrush"] = new SolidColorBrush(accent);
         res["AccentSoftBrush"] = new SolidColorBrush(accent, 0.18);

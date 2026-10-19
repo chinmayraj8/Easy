@@ -124,7 +124,6 @@ public partial class App : Application
 
         AppHost.Get<TrayService>().Create(this);
         AppHost.Get<WindowService>().EnsureToast();
-        AppHost.Get<ConversionService>().FeedbackDue += (_, _) => AppHost.Get<WindowService>().ShowFeedbackNotice();
         AppHost.Get<WatchFolderService>().Start();
         // Once LibreOffice is installed: prepare its profiles while the user isn't converting yet.
         AppHost.Get<EngineDownloadService>().WarmUpInBackground(TimeSpan.FromSeconds(10));
@@ -181,7 +180,7 @@ public partial class App : Application
             AppHost.Get<WindowService>().ShowUpdateNotice(version);
         };
         updates.UpdateFailed += async (_, _) => await AppHost.Get<WindowService>().ShowUpdateFailedAsync();
-        updates.StartPeriodicChecks(() => store.Settings.CheckForUpdates, TimeSpan.FromSeconds(20));
+        // Easy publishes no releases yet: no update checks (they would ask the original Filee project's GitHub).
         DispatcherTimer.RunOnce(() => NotifyEngineUpdates(store), TimeSpan.FromSeconds(25));
     }
 

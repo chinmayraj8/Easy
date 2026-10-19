@@ -34,7 +34,7 @@ public class SingleInstanceTests
     public void A_copy_with_its_own_data_folder_never_reaches_the_users_filee()
     {
         // The name without a data folder must stay the same: a new version forwards to an older one that runs.
-        var usual = "Filee-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData("someone"u8.ToArray()))[..12];
+        var usual = "Easy-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData("someone"u8.ToArray()))[..12];
         Assert.Equal(usual, SingleInstance.NameFor("someone", null));
         var test = SingleInstance.NameFor("someone", Path.Combine(Path.GetTempPath(), "filee-a"));
         Assert.NotEqual(usual, test);

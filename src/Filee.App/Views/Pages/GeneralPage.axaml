@@ -8,10 +8,6 @@
 
     <Border Classes="card">
       <StackPanel Spacing="14">
-        <StackPanel>
-          <TextBlock Classes="label" Text="{DynamicResource general.language}" />
-          <ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding Language}" MinWidth="240" />
-        </StackPanel>
         <ToggleSwitch Content="{DynamicResource general.start_with_system}" IsChecked="{Binding StartWithSystem}" />
         <StackPanel>
           <TextBlock Classes="label" Text="{DynamicResource general.close_action}" />

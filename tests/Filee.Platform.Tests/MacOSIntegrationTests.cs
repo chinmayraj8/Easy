@@ -19,7 +19,7 @@ public sealed class MacOSIntegrationTests
     [Fact]
     public void ServiceSwitchWritesTheEntrySystemSettingsUses()
     {
-        Assert.Equal("\"com.filee.app - Convert with Filee - convertFiles\"", MacOSIntegrationFiles.ServiceStatusKey);
+        Assert.Equal("\"com.chinmayraj8.easy - Convert with Easy - convertFiles\"", MacOSIntegrationFiles.ServiceStatusKey);
         Assert.Contains("\"enabled_context_menu\" = 0;", MacOSIntegrationFiles.ServiceStatus(false));
         Assert.Contains("\"ContextMenu\" = 1;", MacOSIntegrationFiles.ServiceStatus(true));
     }
@@ -37,7 +37,7 @@ public sealed class MacOSIntegrationTests
         // Each translation names the same menu title.
         foreach (var strings in Directory.GetFiles(installer, "ServicesMenu.strings", SearchOption.AllDirectories))
             Assert.StartsWith($"\"{MacOSServicesProvider.MenuItem}\" = ", File.ReadAllLines(strings).Single(l => l.StartsWith('"')));
-        Assert.Equal(3, Directory.GetFiles(installer, "ServicesMenu.strings", SearchOption.AllDirectories).Length);
+        Assert.Single(Directory.GetFiles(installer, "ServicesMenu.strings", SearchOption.AllDirectories)); // English only
     }
 
     private static string RepositoryRoot()

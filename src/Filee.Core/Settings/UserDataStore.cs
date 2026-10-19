@@ -41,7 +41,7 @@ public sealed class UserDataStore
     /// folder in <see cref="DirectoryVariable"/>.
     /// </summary>
     public static string DefaultDirectory =>
-        OverrideDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Filee");
+        OverrideDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Easy");
 
     internal static string? DirectoryFrom(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : Path.TrimEndingDirectorySeparator(Path.GetFullPath(value.Trim()));

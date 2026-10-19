@@ -31,7 +31,7 @@ internal static class StartupFailure
                 ArgumentList =
                 {
                     "-e", "on run argv",
-                    "-e", "display alert \"Filee\" message (item 1 of argv) as critical buttons {\"OK\"}",
+                    "-e", "display alert \"Easy\" message (item 1 of argv) as critical buttons {\"OK\"}",
                     "-e", "end run",
                     message,
                 },

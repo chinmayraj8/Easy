@@ -16,7 +16,7 @@ public class FailedFilesTests
     [AvaloniaFact]
     public void Failures_saved_by_older_versions_are_listed_in_the_current_language()
     {
-        TestServices.EnsureInitialized("ko");
+        TestServices.EnsureInitialized("en");
         var entry = new HistoryEntry
         {
             PresetName = "PNG",
@@ -30,7 +30,7 @@ public class FailedFilesTests
         var failure = Assert.Single(item.Failures);
         Assert.Equal("notes.xyz", failure.Name);
         Assert.Equal($"{AppHost.Get<ILocalizer>()["error.unsupported_source"]} (xyz)", failure.Reason);
-        Assert.Equal("1개 실패", item.FailureSummary);
+        Assert.Equal("1 failed", item.FailureSummary);
         Assert.False(item.CanRetry); // no preset saved: nothing to retry with
     }
 

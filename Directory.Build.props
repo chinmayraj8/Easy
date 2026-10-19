@@ -15,12 +15,12 @@
     <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
 
     <Version>1.12.0</Version>
-    <Product>Filee</Product>
-    <Authors>Filee contributors</Authors>
-    <Copyright>Copyright (c) Filee contributors</Copyright>
+    <Product>Easy</Product>
+    <Authors>chinmayraj8</Authors>
+    <Copyright>Copyright (c) 2026 chinmayraj8. Based on Filee, copyright (c) 2026 Myeonggu Kim (KnifeLemon) and Filee contributors</Copyright>
 
     <!-- Single source of truth for the GitHub repository (used by the updater and the About page). -->
-    <FileeRepositoryUrl>https://github.com/KnifeLemon/Filee</FileeRepositoryUrl>
+    <FileeRepositoryUrl>https://github.com/chinmayraj8/Easy</FileeRepositoryUrl>
     <RepositoryUrl>$(FileeRepositoryUrl)</RepositoryUrl>
   </PropertyGroup>
 </Project>

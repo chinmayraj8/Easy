@@ -53,7 +53,7 @@ if ((Test-Path -LiteralPath $archive) -or (Test-Path -LiteralPath $sums)) {
 }
 $stage = Join-Path $root ('build/.cache/portable/' + [Guid]::NewGuid().ToString('N'))
 $package = Join-Path $stage $packageName
-$appBundle = Join-Path $package 'Filee.app'
+$appBundle = Join-Path $package 'Easy.app'
 $publish = if ($Runtime.StartsWith('osx-')) { Join-Path $appBundle 'Contents/MacOS' } else { $package }
 New-Item -ItemType Directory -Force -Path $publish | Out-Null
 

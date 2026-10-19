@@ -461,7 +461,7 @@ public class RenderTests
     [AvaloniaFact]
     public void Donut_toolbar_renders_for_images()
     {
-        TestServices.EnsureInitialized("ko");
+        TestServices.EnsureInitialized("en");
         var files = new[] { @"C:\photos\a.jpg", @"C:\photos\b.jpg", @"C:\photos\c.jpg" };
         var vm = AppHost.Get<RadialViewModel>();
         vm.Load(files, clickMode: true);
@@ -471,8 +471,8 @@ public class RenderTests
         Pump();
 
         Assert.Equal(10, vm.Items.Count); // with "Trace to SVG" and "Line art to SVG"
-        Assert.Equal("JPG 3개", vm.CenterTitle);
-        Save(window, "donut-images-ko.png");
+        Assert.Equal("3 × JPG", vm.CenterTitle);
+        Save(window, "donut-images-en.png");
         window.Close();
     }
 
@@ -693,13 +693,13 @@ public class RenderTests
     [AvaloniaFact]
     public void Preset_editor_shows_playback_speed_only_for_targets_that_keep_animations()
     {
-        TestServices.EnsureInitialized("ko");
+        TestServices.EnsureInitialized("en");
         var loc = AppHost.Get<Filee.Core.Localization.ILocalizer>();
         var preset = new Filee.Core.Presets.Preset { TargetFormat = "gif", Name = "Slow GIF" };
         var vm = new PresetEditorViewModel(preset, loc);
         Assert.True(vm.ShowAnimationSpeed);
         Assert.Equal(1, vm.AnimationSpeed.Value);
-        Assert.Equal(["0.25×", "0.5×", "0.75×", "1× (원본)", "1.5×", "2×", "4×"], vm.AnimationSpeeds.Select(s => s.Label));
+        Assert.Equal(["0.25×", "0.5×", "0.75×", "1× (original)", "1.5×", "2×", "4×"], vm.AnimationSpeeds.Select(s => s.Label));
         vm.AnimationSpeed = vm.AnimationSpeeds.Single(s => s.Value == 0.5);
         var window = new PresetEditorWindow { DataContext = vm, Height = 900 };
         window.Show();

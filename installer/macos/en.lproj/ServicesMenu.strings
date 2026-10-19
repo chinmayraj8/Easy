@@ -1,2 +1,2 @@
-/* Finder's right-click menu: the title of Filee's service (NSServices in Info.plist). */
-"Convert with Filee" = "Convert with Filee";
+/* Finder's right-click menu: the title of Easy's service (NSServices in Info.plist). */
+"Convert with Easy" = "Convert with Easy";

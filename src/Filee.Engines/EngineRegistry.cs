@@ -65,6 +65,7 @@ public static class EngineRegistry
         new PandocConverter(),
         new GhostscriptConverter(),
         new CalibreConverter(),
+        new OnlyOfficeConverter(loggers?.CreateLogger<OnlyOfficeConverter>()), // Easy: an installed ONLYOFFICE renders Word/PowerPoint/Excel → PDF faithfully
         new LibreOfficeConverter(env, loggers?.CreateLogger<LibreOfficeConverter>()),
     ];
 
