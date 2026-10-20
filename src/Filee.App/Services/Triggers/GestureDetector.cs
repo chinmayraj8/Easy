@@ -5,6 +5,8 @@
 //                →  button up  →  DragEnded
 // Hold gesture:  button down with modifiers  →  (armed)  →  HoldElapsed without moving  →  HoldTriggered
 // Key chord:     key down with the exact modifiers  →  KeyChordTriggered at the last known cursor position
+// Tapped modifier: modifiers pressed and released alone  →  the next plain button press within LatchMilliseconds
+//                counts as if they were still held (tap Option, let go, then drag)
 
 using Filee.Core.Settings;
 
@@ -19,6 +21,12 @@ public sealed class GestureDetector
     private bool _dragActive;
     private bool _lateRejected; // scope check failed for this drag; don't re-check on every move
     private int _lastX, _lastY;
+    private ModifierKeys _tapping; // modifiers pressed since the last other key or button
+    private ModifierKeys _latched;
+    private long _latchedAt;
+
+    /// <summary>How long a tapped modifier stays armed for the next button press.</summary>
+    public const int LatchMilliseconds = 3000;
 
     private sealed record Armed(TriggerGesture Gesture, TriggerMouseButton Button, int X, int Y, long Token);
 
@@ -61,6 +69,10 @@ public sealed class GestureDetector
             _lastY = y;
             _armed = null;
             _lateRejected = false;
+            _tapping = ModifierKeys.None;
+            if (modifiers == ModifierKeys.None && Environment.TickCount64 - _latchedAt <= LatchMilliseconds)
+                modifiers = _latched;
+            _latched = ModifierKeys.None;
             if (Paused)
                 return;
 
@@ -173,6 +185,8 @@ public sealed class GestureDetector
         int x, y;
         lock (_lock)
         {
+            var modifier = ModifierOf(key);
+            _tapping = modifier == ModifierKeys.None ? ModifierKeys.None : _tapping | modifier;
             if (Paused)
                 return;
             fire = _gestures.FirstOrDefault(g =>
@@ -186,4 +200,27 @@ public sealed class GestureDetector
         if (fire is not null)
             KeyChordTriggered?.Invoke(fire, x, y);
     }
+
+    /// <summary>A key went up. Releasing a modifier that was tapped alone latches it for the next button press.</summary>
+    public void KeyUp(string key)
+    {
+        lock (_lock)
+        {
+            if (ModifierOf(key) == ModifierKeys.None || _tapping == ModifierKeys.None)
+                return;
+            _latched = _tapping;
+            _latchedAt = Environment.TickCount64;
+            _tapping = ModifierKeys.None;
+        }
+    }
+
+    /// <summary>"LeftAlt" → Alt; None for keys that are not modifiers.</summary>
+    private static ModifierKeys ModifierOf(string key) => key switch
+    {
+        "LeftControl" or "RightControl" => ModifierKeys.Ctrl,
+        "LeftAlt" or "RightAlt" => ModifierKeys.Alt,
+        "LeftShift" or "RightShift" => ModifierKeys.Shift,
+        "LeftMeta" or "RightMeta" => ModifierKeys.Meta,
+        _ => ModifierKeys.None,
+    };
 }

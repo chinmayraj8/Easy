@@ -137,4 +137,40 @@ public class GestureDetectorTests
         detector.HoldElapsed(token);
         Assert.Equal(1, held);
     }
+
+    [Fact]
+    public void Tapped_modifier_arms_the_next_plain_drag_once()
+    {
+        var detector = Create(CtrlDrag);
+        var started = 0;
+        detector.DragStarted += (_, _, _) => started++;
+
+        detector.KeyDown("LeftControl", ModifierKeys.Ctrl);
+        detector.KeyUp("LeftControl");
+        detector.MouseDown(TriggerMouseButton.Left, 0, 0, ModifierKeys.None);
+        detector.MouseMove(50, 0, ModifierKeys.None, TriggerMouseButton.Left);
+        detector.MouseUp(TriggerMouseButton.Left, 50, 0);
+        Assert.Equal(1, started);
+
+        detector.MouseDown(TriggerMouseButton.Left, 0, 0, ModifierKeys.None); // latch is used up
+        detector.MouseMove(50, 0, ModifierKeys.None, TriggerMouseButton.Left);
+        Assert.Equal(1, started);
+    }
+
+    [Fact]
+    public void Modifier_used_with_another_key_does_not_latch()
+    {
+        var detector = Create(CtrlDrag);
+        var started = 0;
+        detector.DragStarted += (_, _, _) => started++;
+
+        detector.KeyDown("LeftControl", ModifierKeys.Ctrl);
+        detector.KeyDown("C", ModifierKeys.Ctrl); // Ctrl+C, not a tap
+        detector.KeyUp("C");
+        detector.KeyUp("LeftControl");
+        detector.MouseDown(TriggerMouseButton.Left, 0, 0, ModifierKeys.None);
+        detector.MouseMove(50, 0, ModifierKeys.None, TriggerMouseButton.Left);
+
+        Assert.Equal(0, started);
+    }
 }
