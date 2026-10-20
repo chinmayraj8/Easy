@@ -131,6 +131,18 @@ public sealed class Preset
     /// <summary><see cref="MaxSizeKb"/> of a preset that asks for the size when it runs.</summary>
     public const int AskSize = -1;
 
+    /// <summary>
+    /// With <see cref="BuiltInData.SameAsSource"/>: the format a file is saved in when nothing can write its own (HEIC
+    /// without the FFmpeg download). Null: such a file can't be converted.
+    /// </summary>
+    public string? FallbackFormat { get; set; }
+
+    /// <summary>The format a file in format <paramref name="source"/> is converted to.</summary>
+    public string TargetFor(string source, Conversion.RoutePlanner planner) =>
+        TargetFormat != BuiltInData.SameAsSource ? TargetFormat
+        : FallbackFormat is { } fallback && !planner.CanConvert(source, source) ? fallback
+        : source;
+
     /// <summary>"200", "200 KB", "1.5 MB" → kilobytes; null when it isn't a size above zero.</summary>
     public static int? ParseSizeKb(string text)
     {
@@ -181,6 +193,7 @@ public sealed class Preset
         Kind = Kind,
         SubPresetIds = [.. SubPresetIds],
         MaxSizeKb = MaxSizeKb,
+        FallbackFormat = FallbackFormat,
     };
 }
 
@@ -409,6 +422,12 @@ public sealed class PdfOptions
     /// and selected. The pages look as before; pages that have text already are left alone.
     /// </summary>
     public bool MakeSearchable { get; set; }
+
+    /// <summary>For PDF → PDF: <see cref="WatermarkText"/> across every page, big, grey and see-through.</summary>
+    public bool Watermark { get; set; }
+
+    /// <summary>With <see cref="Watermark"/>: the text ("CONFIDENTIAL" when empty). Asked when it runs from the donut.</summary>
+    public string WatermarkText { get; set; } = "";
 
     /// <summary>For PDF → image: stack the pages into one tall image instead of one image per page.</summary>
     public bool CombinePages { get; set; }

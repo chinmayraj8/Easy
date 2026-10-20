@@ -483,6 +483,129 @@ public class ImageAndPdfTests(EngineFixture fx) : IClassFixture<EngineFixture>
     }
 
     [Fact]
+    public async Task Remove_info_takes_away_location_and_camera_and_keeps_the_photo_upright()
+    {
+        var dir = fx.NewFolder();
+        var photo = Path.Combine(dir, "beach.jpg");
+        using (var image = new MagickImage(MagickColors.SkyBlue, 320, 200))
+        {
+            var exif = new ExifProfile();
+            exif.SetValue(ExifTag.Make, "Apple");
+            exif.SetValue(ExifTag.Model, "iPhone 17");
+            exif.SetValue(ExifTag.GPSLatitudeRef, "N");
+            exif.SetValue(ExifTag.GPSLatitude, [new Rational(12, 1), new Rational(58, 1), new Rational(0, 1)]);
+            exif.SetValue(ExifTag.GPSLongitude, [new Rational(77, 1), new Rational(35, 1), new Rational(0, 1)]);
+            exif.SetValue(ExifTag.DateTimeOriginal, "2026:10:20 09:15:00");
+            exif.SetValue(ExifTag.Orientation, (ushort)6);
+            image.Orientation = OrientationType.RightTop; // taken with the phone upright: stored sideways (EXIF 6)
+            image.SetProfile(exif);
+            image.SetAttribute("comment", "home");
+            image.Quality = 90;
+            image.Write(photo);
+        }
+
+        using (var check = new MagickImage(photo))
+            Assert.Equal(OrientationType.RightTop, check.Orientation);
+        var job = await fx.ConvertAsync([photo], BuiltInData.CreatePresets().Single(p => p.Id == "remove-info"));
+
+        AssertDone(job);
+        var output = job.Outputs.Single();
+        Assert.Equal("beach_clean.jpg", Path.GetFileName(output));
+        using var clean = new MagickImage(output);
+        var left = clean.GetExifProfile();
+        Assert.True(left is null || left.Values.All(v => v.Tag != ExifTag.GPSLatitude && v.Tag != ExifTag.GPSLongitude
+            && v.Tag != ExifTag.Make && v.Tag != ExifTag.Model && v.Tag != ExifTag.DateTimeOriginal), "EXIF left: " + string.Join(", ", left?.Values.Select(v => v.Tag) ?? []));
+        Assert.Null(clean.GetAttribute("comment"));
+        Assert.Null(clean.GetXmpProfile());
+        Assert.Equal((200u, 320u), (clean.Width, clean.Height)); // turned the way it looked, so no orientation is needed
+        Assert.True(new FileInfo(output).Length <= new FileInfo(photo).Length * 1.1, "not re-saved at a higher quality");
+    }
+
+    [Fact]
+    public async Task Remove_info_saves_a_photo_its_own_format_cant_be_written_in_as_jpg()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Skip("Makes the HEIC with sips.");
+            return;
+        }
+        var dir = fx.NewFolder();
+        var jpg = EngineFixture.MakeImage(dir, "seed.jpg", MagickFormat.Jpeg);
+        var heic = Path.Combine(dir, "IMG_0042.heic");
+        using (var sips = System.Diagnostics.Process.Start("/usr/bin/sips", ["-s", "format", "heic", jpg, "--out", heic])!)
+            sips.WaitForExit();
+
+        var job = await fx.ConvertAsync([heic], BuiltInData.CreatePresets().Single(p => p.Id == "remove-info"));
+
+        AssertDone(job);
+        // HEIC needs the FFmpeg download to be written: without it the photo comes out as a JPG, with it as a HEIC.
+        var expected = fx.Catalog.CreatePlanner().CanConvert("heic", "heic") ? "IMG_0042_clean.heic" : "IMG_0042_clean.jpg";
+        Assert.Equal(expected, Path.GetFileName(job.Outputs.Single()));
+    }
+
+    [Fact]
+    public async Task Watermark_crosses_the_middle_of_every_page_also_a_turned_one()
+    {
+        var dir = fx.NewFolder();
+        var pdf = (await fx.ConvertAsync([EngineFixture.MakeMultiPageTiff(dir, 2)], new Preset { TargetFormat = "pdf" })).Outputs.Single();
+        using (var document = PdfReader.Open(pdf, PdfDocumentOpenMode.Modify))
+        {
+            document.Pages[1].Rotate = 90; // shown sideways
+            document.Save(pdf);
+        }
+
+        var job = await fx.ConvertAsync([pdf], new Preset
+        {
+            TargetFormat = "pdf",
+            Pdf = { Watermark = true, WatermarkText = "Copy for Chinmay" },
+            Output = { FileNamePattern = "{name}_watermarked" },
+        });
+
+        AssertDone(job);
+        Assert.EndsWith("_watermarked.pdf", job.Outputs.Single());
+        using var marked = UglyToad.PdfPig.PdfDocument.Open(job.Outputs.Single());
+        Assert.Equal(2, marked.NumberOfPages);
+        foreach (var page in marked.GetPages())
+        {
+            Assert.Contains("Copy for Chinmay", page.Text);
+            Assert.Single(page.GetImages()); // the page's own content is still there
+            // Across the middle, as the page is shown: from the lower left half to the upper right half.
+            var letters = page.Letters.Where(l => !string.IsNullOrWhiteSpace(l.Value)).ToList();
+            Assert.All(letters, l => Assert.True(l.StartBaseLine.X >= 0 && l.StartBaseLine.X <= page.Width
+                && l.StartBaseLine.Y >= 0 && l.StartBaseLine.Y <= page.Height, $"page {page.Number}: {l.Value} at {l.StartBaseLine}"));
+            Assert.True(letters[0].StartBaseLine.X < page.Width / 2 && letters[0].StartBaseLine.Y < page.Height / 2, $"page {page.Number} starts at {letters[0].StartBaseLine}");
+            Assert.True(letters[^1].StartBaseLine.X > page.Width / 2 && letters[^1].StartBaseLine.Y > page.Height / 2, $"page {page.Number} ends at {letters[^1].StartBaseLine}");
+        }
+
+        // Seen, but see-through: the middle of the page changed, and isn't covered in solid grey.
+#pragma warning disable CA1416 // PDFium ships for every desktop platform the tests run on
+        using var before = PDFtoImage.Conversion.ToImage(File.ReadAllBytes(pdf), page: 0);
+        using var after = PDFtoImage.Conversion.ToImage(File.ReadAllBytes(job.Outputs.Single()), page: 0);
+#pragma warning restore CA1416
+        Assert.NotEqual(before.Bytes, after.Bytes);
+        var changed = 0;
+        for (var x = 0; x < after.Width; x += 4)
+            for (var y = 0; y < after.Height; y += 4)
+                if (before.GetPixel(x, y) != after.GetPixel(x, y))
+                    changed++;
+        var sampled = (after.Width / 4) * (after.Height / 4);
+        Assert.InRange(changed, 1, sampled / 3);
+    }
+
+    [Fact]
+    public async Task Watermark_without_text_says_confidential()
+    {
+        var dir = fx.NewFolder();
+        var pdf = (await fx.ConvertAsync([EngineFixture.MakeMultiPageTiff(dir, 1)], new Preset { TargetFormat = "pdf" })).Outputs.Single();
+
+        var job = await fx.ConvertAsync([pdf], new Preset { TargetFormat = "pdf", Pdf = { Watermark = true } });
+
+        AssertDone(job);
+        using var marked = UglyToad.PdfPig.PdfDocument.Open(job.Outputs.Single());
+        Assert.Contains("CONFIDENTIAL", marked.GetPage(1).Text);
+    }
+
+    [Fact]
     public async Task Compress_to_a_size_never_asked_is_refused_not_saved_uncompressed()
     {
         // Run from a watch folder or the CLI there is nobody to ask for the size.

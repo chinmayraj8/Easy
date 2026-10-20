@@ -642,6 +642,31 @@ internal static class SettingsMigrations
         // v30: two or more pictures merge into one PDF from the images donut (shown only when several are selected).
         if (from < 30)
             changed |= Offer(presets, profiles, "images", "merge-pdf", "to-pdf");
+        // v34: "Watermark", last in the PDF donut's "Pages" group when it has room.
+        if (from < 34)
+        {
+            foreach (var preset in BuiltInData.WatermarkPresets().Where(p => presets.All(existing => existing.Id != p.Id)))
+            {
+                presets.Add(preset);
+                changed = true;
+            }
+            if (presets.FirstOrDefault(p => p.Id == "pdf-pages") is { Kind: PresetKind.Group } pages
+                && !pages.SubPresetIds.Contains("watermark-pdf") && pages.SubPresetIds.Count < Preset.MaxSubPresets)
+            {
+                pages.SubPresetIds.Add("watermark-pdf");
+                changed = true;
+            }
+        }
+        // v33: "Remove info", on the images donut after "Compress" where there is room.
+        if (from < 33)
+        {
+            foreach (var preset in BuiltInData.PrivacyPresets().Where(p => presets.All(existing => existing.Id != p.Id)))
+            {
+                presets.Add(preset);
+                changed = true;
+            }
+            changed |= Offer(presets, profiles, "images", "remove-info", "compress-images");
+        }
         // v31: "Searchable PDF", first in the PDF donut's "Text" group when it has room.
         if (from < 31)
         {

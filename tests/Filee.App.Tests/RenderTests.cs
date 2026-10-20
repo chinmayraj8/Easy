@@ -470,7 +470,7 @@ public class RenderTests
         window.DonutControl.SetExternalHighlight(1);
         Pump();
 
-        Assert.Equal(11, vm.Items.Count); // with "Merge PDF" (several pictures), "Trace to SVG", "Line art to SVG", the "Compress" group, "Copy text" and "Hide"
+        Assert.Equal(12, vm.Items.Count); // with "Merge PDF" (several pictures), "Trace to SVG", "Line art to SVG", the "Compress" group, "Remove info", "Copy text" and "Hide"
         Assert.Equal("3 × JPG", vm.CenterTitle);
         Save(window, "donut-images-en.png");
         window.Close();

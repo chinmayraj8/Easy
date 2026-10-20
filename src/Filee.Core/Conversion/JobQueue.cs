@@ -390,9 +390,7 @@ public sealed class JobQueue : IAsyncDisposable
         if (IsEmptyFile(file.SourcePath))
             return Fail(file, "error.empty_file", null);
 
-        var target = !finalOutput ? intermediate
-            : jobPreset.TargetFormat == BuiltInData.SameAsSource ? source.Id
-            : jobPreset.TargetFormat;
+        var target = !finalOutput ? intermediate : jobPreset.TargetFor(source.Id, planner);
 
         // "Save every frame": a video becomes a folder of pictures in one step of its own. Never for an intermediate
         // file, and never on the way to another format (video → JPG is otherwise one still frame).

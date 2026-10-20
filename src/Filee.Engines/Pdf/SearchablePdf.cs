@@ -28,21 +28,13 @@ internal static class SearchablePdf
     /// <summary>A page with at least this many letters already has text: it is not read again.</summary>
     private const int TextLetters = 20;
 
-    private static readonly Encoding WinAnsi;
-
-    static SearchablePdf()
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        WinAnsi = Encoding.GetEncoding(1252, new EncoderReplacementFallback("?"), DecoderFallback.ReplacementFallback);
-    }
-
     public static IReadOnlyList<string> Write(ConversionStep step, IProgress<double>? progress, CancellationToken ct)
     {
         if (!TextRecognizer.IsAvailable)
             throw new ConversionRefusedException("error.needs_macos");
 
         var bytes = File.ReadAllBytes(step.InputPath);
-        using var document = PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Modify);
+        using var document = PdfSharpConverter.Open(step.InputPath, PdfDocumentOpenMode.Modify);
         var scanned = ScannedPages(bytes, document.PageCount);
         if (scanned.Count == 0)
             step.Notice?.Invoke("notice.already_searchable");
@@ -116,63 +108,21 @@ internal static class SearchablePdf
     /// </summary>
     private static void AddText(PdfPage page, PdfDictionary font, IReadOnlyList<RecognizedLine> lines)
     {
-        var resources = page.Resources;
-        if (resources.Elements.GetDictionary("/Font") is not { } fonts)
-        {
-            fonts = new PdfDictionary(page.Owner);
-            resources.Elements["/Font"] = fonts;
-        }
-        fonts.Elements[FontKey] = font.Reference;
-
-        var box = page.CropBoxReadOnly.IsEmpty ? page.MediaBoxReadOnly : page.CropBoxReadOnly;
-        var (left, bottom, width, height) = (box.X1, box.Y1, box.Width, box.Height);
-        var rotation = ((page.Rotate % 360) + 360) % 360;
-        // The page as shown: its width and height swap when it is turned a quarter.
-        var (shownWidth, shownHeight) = rotation is 90 or 270 ? (height, width) : (width, height);
-
+        PdfPageText.AddResource(page, "/Font", FontKey, font);
+        var shown = new ShownPage(page);
         var text = new StringBuilder("BT 3 Tr\n");
         foreach (var line in lines)
         {
-            var size = line.Height * shownHeight * 0.8; // the box holds ascenders and descenders
+            var size = line.Height * shown.Height * 0.8; // the box holds ascenders and descenders
             if (size <= 0.5)
                 continue;
-            var encoded = WinAnsi.GetBytes(line.Text.Trim());
-            var stretch = line.Width * shownWidth / (encoded.Length * GlyphWidth / 1000.0 * size) * 100;
-            // Baseline a fifth of the box above its bottom, in the page as shown...
-            var (x, y) = (line.X * shownWidth, (line.Y + line.Height * 0.2) * shownHeight);
-            // ...and in the page's own space: where that point is, which way the text runs and which way is up.
-            var (px, py, run, up) = rotation switch
-            {
-                90 => (width - y, x, (0.0, 1.0), (-1.0, 0.0)),
-                180 => (width - x, height - y, (-1.0, 0.0), (0.0, -1.0)),
-                270 => (y, height - x, (0.0, -1.0), (1.0, 0.0)),
-                _ => (x, y, (1.0, 0.0), (0.0, 1.0)),
-            };
-            text.Append(CultureInfo.InvariantCulture, $"{FontKey} {size:0.###} Tf {stretch:0.###} Tz ")
-                .Append(CultureInfo.InvariantCulture, $"{run.Item1:0.###} {run.Item2:0.###} {up.Item1:0.###} {up.Item2:0.###} {left + px:0.###} {bottom + py:0.###} Tm (")
-                .Append(Escape(encoded)).Append(") Tj\n");
+            var encoded = PdfPageText.WinAnsi.GetBytes(line.Text.Trim());
+            var stretch = line.Width * shown.Width / (encoded.Length * GlyphWidth / 1000.0 * size) * 100;
+            // Baseline a fifth of the box above its bottom.
+            var matrix = shown.TextMatrix(line.X * shown.Width, (line.Y + line.Height * 0.2) * shown.Height);
+            text.Append(CultureInfo.InvariantCulture, $"{FontKey} {size:0.###} Tf {stretch:0.###} Tz {matrix} (")
+                .Append(PdfPageText.Escape(encoded)).Append(") Tj\n");
         }
-        text.Append("ET\n");
-
-        // The page's own drawing may leave the coordinate system changed: it is wrapped in q/Q so the text starts from
-        // the page's coordinates.
-        page.Contents.PrependContent().CreateStream("q\n"u8.ToArray());
-        page.Contents.AppendContent().CreateStream(Encoding.ASCII.GetBytes("Q\n" + text));
-    }
-
-    /// <summary>A PDF literal string's inside: \, ( and ) escaped, bytes outside printable ASCII as octal.</summary>
-    private static string Escape(byte[] encoded)
-    {
-        var escaped = new StringBuilder(encoded.Length);
-        foreach (var b in encoded)
-        {
-            if (b is (byte)'\\' or (byte)'(' or (byte)')')
-                escaped.Append('\\').Append((char)b);
-            else if (b is < 32 or > 126)
-                escaped.Append('\\').Append(Convert.ToString(b, 8).PadLeft(3, '0'));
-            else
-                escaped.Append((char)b);
-        }
-        return escaped.ToString();
+        PdfPageText.Append(page, text.Append("ET\n").ToString());
     }
 }

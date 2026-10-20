@@ -296,6 +296,13 @@ public sealed class RadialController(
             preset = preset.Clone();
             preset.Pdf.SplitParts = parts;
         }
+        else if (preset.Pdf.Watermark && preset.Pdf.WatermarkText.Length == 0)
+        {
+            if (await AskAsync("watermark.question", "watermark.hint") is not { } text)
+                return;
+            preset = preset.Clone();
+            preset.Pdf.WatermarkText = text;
+        }
         else if (preset.Pdf.Reorder)
         {
             // One PDF: its pages to drag, turn and leave out, as the page editor shows them (the pages it leaves out

@@ -76,6 +76,8 @@ public static class BuiltInData
         },
         .. PagePresets(),
         .. OcrPresets(),
+        .. PrivacyPresets(),
+        .. WatermarkPresets(),
         .. PdfCompressionPresets(),
         .. PdfSlidesPresets(),
         .. FramePresets(),
@@ -329,7 +331,7 @@ public static class BuiltInData
         {
             Id = "images", NameKey = "profile.images",
             Extensions = ExtensionsOf(FormatCategory.Image),
-            PresetIds = ["to-png", "to-jpg", "to-webp", "to-pdf", "merge-pdf", "trace-svg", "trace-line-art", "half-size", "compress-images", "copy-text", "hide"],
+            PresetIds = ["to-png", "to-jpg", "to-webp", "to-pdf", "merge-pdf", "trace-svg", "trace-line-art", "half-size", "compress-images", "remove-info", "copy-text", "hide"],
         },
         new()
         {
@@ -431,6 +433,30 @@ public static class BuiltInData
         },
     ];
 
+    /// <summary>"Watermark" for PDFs (added in settings schema 34, in the "Pages" group).</summary>
+    public static IEnumerable<Preset> WatermarkPresets() =>
+    [
+        new()
+        {
+            Id = "watermark-pdf", NameKey = "preset.watermark_pdf", TargetFormat = "pdf",
+            Pdf = { Watermark = true }, Output = { FileNamePattern = "{name}_watermarked" },
+        },
+    ];
+
+    /// <summary>
+    /// "Remove info": a photo without its location, camera, dates and comments, turned upright first so it still looks
+    /// the same; the colour profile stays (added in settings schema 33, on the images donut after "Compress"). A JPEG is
+    /// saved again at its own quality at most; a HEIC (an iPhone photo) without the FFmpeg download becomes a JPG.
+    /// </summary>
+    public static IEnumerable<Preset> PrivacyPresets() =>
+    [
+        new()
+        {
+            Id = "remove-info", NameKey = "preset.remove_info", TargetFormat = SameAsSource, FallbackFormat = "jpg",
+            Image = { KeepMetadata = false, KeepColorProfile = true, Quality = 100 }, Output = { FileNamePattern = "{name}_clean" },
+        },
+    ];
+
     /// <summary>"Searchable PDF": scanned pages get their text (added in settings schema 31, first in the "Text" group).</summary>
     public static IEnumerable<Preset> OcrPresets() =>
     [
@@ -452,7 +478,7 @@ public static class BuiltInData
         new()
         {
             Id = "pdf-pages", NameKey = "preset.group_pages", TargetFormat = Preset.GroupTarget, Kind = PresetKind.Group,
-            SubPresetIds = ["pdf-split", "reorder-pdf"],
+            SubPresetIds = ["pdf-split", "reorder-pdf", "watermark-pdf"],
         },
     ];
 

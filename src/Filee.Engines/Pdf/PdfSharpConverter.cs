@@ -37,6 +37,7 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
     public Task<IReadOnlyList<string>> ConvertAsync(ConversionStep step, IProgress<double>? progress, CancellationToken cancellationToken) =>
         step.From != "pdf" ? Task.Run(() => ImageToPdf(step, progress, cancellationToken), cancellationToken)
         : step.Preset.Pdf.MakeSearchable ? Task.Run(() => SearchablePdf.Write(step, progress, cancellationToken), cancellationToken)
+        : step.Preset.Pdf.Watermark ? Task.Run(() => PdfWatermark.Write(step, cancellationToken), cancellationToken)
         : step.Preset.Pdf.Unlock || step.Preset.Pdf.Protect ? Task.Run(() => UnlockOrProtect(step), cancellationToken)
         : step.Preset.Pdf.Compression == PdfCompression.None ? Task.Run(() => SplitOrExtract(step, progress, cancellationToken), cancellationToken)
         : Task.Run(() => CompressAsync(step, progress, cancellationToken), cancellationToken);

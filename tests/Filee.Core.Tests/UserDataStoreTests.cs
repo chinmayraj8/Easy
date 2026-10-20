@@ -1050,6 +1050,38 @@ public class UserDataStoreTests
     }
 
     [Fact]
+    public void Version_33_libraries_get_watermark_last_in_the_pages_group_once()
+    {
+        var presets = BuiltInData.CreatePresets();
+        presets.RemoveAll(p => p.Id == "watermark-pdf");
+        var pages = presets.Single(p => p.Id == "pdf-pages");
+        pages.SubPresetIds.Remove("watermark-pdf");
+        var profiles = BuiltInData.CreateProfiles();
+
+        Assert.True(SettingsMigrations.ApplyToLibrary(33, presets, profiles));
+
+        Assert.Equal(BuiltInData.CreatePresets().Single(p => p.Id == "pdf-pages").SubPresetIds, pages.SubPresetIds);
+        Assert.True(presets.Single(p => p.Id == "watermark-pdf").Pdf.Watermark);
+        Assert.False(SettingsMigrations.ApplyToLibrary(33, presets, profiles)); // once only
+    }
+
+    [Fact]
+    public void Version_32_libraries_get_remove_info_on_the_images_donut_after_compress_once()
+    {
+        var presets = BuiltInData.CreatePresets();
+        presets.RemoveAll(p => p.Id == "remove-info");
+        var profiles = BuiltInData.CreateProfiles();
+        var images = profiles.Single(p => p.Id == "images");
+        images.PresetIds.Remove("remove-info");
+
+        Assert.True(SettingsMigrations.ApplyToLibrary(32, presets, profiles));
+
+        Assert.Equal(BuiltInData.CreateProfiles().Single(p => p.Id == "images").PresetIds, images.PresetIds);
+        Assert.False(presets.Single(p => p.Id == "remove-info").Image.KeepMetadata);
+        Assert.False(SettingsMigrations.ApplyToLibrary(32, presets, profiles)); // once only
+    }
+
+    [Fact]
     public void Version_30_libraries_get_searchable_pdf_first_in_the_text_group_once()
     {
         var presets = BuiltInData.CreatePresets();
