@@ -72,6 +72,12 @@ public sealed class TriggerGesture
 
     public TriggerScope Scope { get; set; } = TriggerScope.FileManager;
 
+    /// <summary>
+    /// For <see cref="TriggerKind.KeyChord"/> (macOS): opens the donut for the picture in the clipboard, a screenshot for
+    /// one, instead of the selected files; what it converts to is saved into the front Finder window's folder.
+    /// </summary>
+    public bool Clipboard { get; set; }
+
     public TriggerGesture Clone() => (TriggerGesture)MemberwiseClone();
 
     /// <summary>Default gestures for the current OS.</summary>
@@ -83,6 +89,17 @@ public sealed class TriggerGesture
         [
             new() { Kind = TriggerKind.Drag, Modifiers = dragModifier, Button = TriggerMouseButton.Left },
             new() { Kind = TriggerKind.KeyChord, Modifiers = ModifierKeys.Ctrl | ModifierKeys.Alt, Button = TriggerMouseButton.None, Key = "Space" },
+            .. OperatingSystem.IsMacOS() ? [ClipboardDefault()] : Array.Empty<TriggerGesture>(),
         ];
     }
+
+    /// <summary>Ctrl + Option + V (V as in paste): the donut for the clipboard picture.</summary>
+    public static TriggerGesture ClipboardDefault() => new()
+    {
+        Kind = TriggerKind.KeyChord,
+        Modifiers = ModifierKeys.Ctrl | ModifierKeys.Alt,
+        Button = TriggerMouseButton.None,
+        Key = "V",
+        Clipboard = true,
+    };
 }

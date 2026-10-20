@@ -47,6 +47,7 @@ public sealed class RadialController(
     private bool _visible;
     private bool _dropped;
     private bool _editing;
+    private string? _outputFolder; // the clipboard donut: where its conversions are saved (the Finder folder)
     private JobViewModel? _progressJob;   // job currently shown by the ring (null once finished / handed off)
     private JobViewModel? _lastRingJob;   // for "click the ✓ to open the folder"
     private IDisposable? _handOffTimer;
@@ -77,6 +78,7 @@ public sealed class RadialController(
     /// </summary>
     public void ShowForDrag(int x, int y)
     {
+        _outputFolder = null;
         ReleaseProgressToToast();
         _grace.Cancel();
         var window = EnsureWindow();
@@ -98,12 +100,23 @@ public sealed class RadialController(
     }
 
     /// <summary>
+    /// The donut for <paramref name="picture"/>, the clipboard's picture saved as a file: what it converts to goes into
+    /// <paramref name="folder"/> (the Finder window it was opened in), not next to that file.
+    /// </summary>
+    public void ShowForClipboard(int x, int y, string picture, string folder)
+    {
+        ShowForFiles(x, y, [picture]);
+        _outputFolder = folder;
+    }
+
+    /// <summary>
     /// Opens the donut for known files (click mode). Shortcuts among them stand for the files they point to.
     /// <paramref name="forAnotherProcess"/>: the files came from a later launch or the Services menu, so on macOS the
     /// donut may lose focus once while Filee becomes the active app.
     /// </summary>
     public void ShowForFiles(int x, int y, IReadOnlyList<string> files, bool forAnotherProcess = false)
     {
+        _outputFolder = null;
         files = platform.ResolveShortcuts(files);
         if (files.Count == 0)
             return;
@@ -285,14 +298,15 @@ public sealed class RadialController(
         }
         else if (preset.Pdf.Reorder)
         {
-            // One PDF: its pages to drag into place; several: the order typed, for each of them.
-            var order = files.Count == 1 && FormatRegistry.Detect(files[0])?.Id == "pdf"
-                ? await PickPageOrderAsync(files[0])
-                : await AskAsync("reorder.question", "reorder.hint");
+            // One PDF: its pages to drag, turn and leave out, as the page editor shows them (the pages it leaves out
+            // are dropped); several: the order typed, for each of them (pages left out follow).
+            var editor = files.Count == 1 && FormatRegistry.Detect(files[0])?.Id == "pdf";
+            var order = editor ? await PickPageOrderAsync(files[0]) : await AskAsync("reorder.question", "reorder.hint");
             if (order is null)
                 return;
             preset = preset.Clone();
             preset.Pdf.PageOrder = order;
+            preset.Pdf.DropUnlisted = editor;
         }
         else if (preset.MaxSizeKb == Preset.AskSize)
         {
@@ -313,6 +327,13 @@ public sealed class RadialController(
                 return;
             preset = preset.Clone();
             preset.Pdf.Password = password;
+        }
+
+        if (_outputFolder is { } folder && preset.Kind == PresetKind.Convert)
+        {
+            preset = preset.Clone();
+            preset.Output.Location = OutputLocation.CustomFolder;
+            preset.Output.CustomFolder = folder;
         }
 
         if (preset.Kind == PresetKind.CopyText)

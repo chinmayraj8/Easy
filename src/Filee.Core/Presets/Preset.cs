@@ -395,10 +395,20 @@ public sealed class PdfOptions
     public bool Reorder { get; set; }
 
     /// <summary>
-    /// With <see cref="Reorder"/>: the new order, e.g. <c>"3, 1-2"</c> or <c>"10-1"</c> (reversed); pages left out follow
-    /// in their order. Asked when it runs from the donut.
+    /// With <see cref="Reorder"/>: the new order, e.g. <c>"3, 1-2"</c> or <c>"10-1"</c> (reversed), each part optionally
+    /// turned clockwise (<c>"3@90"</c>); pages left out follow in their order unless <see cref="DropUnlisted"/>. Asked when
+    /// it runs from the donut.
     /// </summary>
     public string PageOrder { get; set; } = "";
+
+    /// <summary>With <see cref="Reorder"/>: pages <see cref="PageOrder"/> leaves out are removed (the page editor).</summary>
+    public bool DropUnlisted { get; set; }
+
+    /// <summary>
+    /// For PDF → PDF: read the text of scanned pages (macOS Vision) and lay it invisibly over them, so it can be searched
+    /// and selected. The pages look as before; pages that have text already are left alone.
+    /// </summary>
+    public bool MakeSearchable { get; set; }
 
     /// <summary>For PDF → image: stack the pages into one tall image instead of one image per page.</summary>
     public bool CombinePages { get; set; }

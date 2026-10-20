@@ -1,9 +1,15 @@
 // Reads the text in a picture with Apple's Vision framework (VNRecognizeTextRequest, the engine behind Live Text): on
-// the Mac, offline, nothing to install. Called through the Objective-C runtime like MacOSServicesProvider.
+// the Mac, offline, nothing to install. Called through the Objective-C runtime like MacOSServicesProvider. "Copy text"
+// takes the lines; "Searchable PDF" also where each one is, to lay it over the page.
 
 using System.Runtime.InteropServices;
 
-namespace Filee.Platform.MacOS;
+namespace Filee.Engines.Ocr;
+
+/// <summary>
+/// A line of text found in a picture, and its box as fractions of the picture (0-1), origin at the bottom left.
+/// </summary>
+public readonly record struct RecognizedLine(string Text, double X, double Y, double Width, double Height);
 
 public static class TextRecognizer
 {
@@ -13,7 +19,14 @@ public static class TextRecognizer
 
     /// <summary>The lines of text in an image file (PNG, JPEG, HEIC, TIFF ...), top to bottom; "" when there are none.</summary>
     /// <exception cref="PlatformNotSupportedException">Not macOS, or Vision couldn't be loaded.</exception>
-    public static string Recognize(string imagePath)
+    public static string Recognize(string imagePath) => string.Join('\n', RecognizeLines(imagePath).Select(l => l.Text));
+
+    /// <summary>True on a Mac where Vision is there to read text.</summary>
+    public static bool IsAvailable => OperatingSystem.IsMacOS() && Loaded.Value;
+
+    /// <summary>The lines of text in an image file with where each one is, top to bottom.</summary>
+    /// <exception cref="PlatformNotSupportedException">Not macOS, or Vision couldn't be loaded.</exception>
+    public static IReadOnlyList<RecognizedLine> RecognizeLines(string imagePath)
     {
         if (!OperatingSystem.IsMacOS() || !Loaded.Value)
             throw new PlatformNotSupportedException("Text recognition needs macOS.");
@@ -40,15 +53,18 @@ public static class TextRecognizer
                     throw new InvalidOperationException(Utf8String(Send(error, Sel("localizedDescription"))) ?? "Vision couldn't read the picture.");
 
                 var results = Send(request, Sel("results"));
-                var lines = new List<string>();
+                var lines = new List<RecognizedLine>();
                 var count = results == 0 ? 0 : (long)Send(results, Sel("count"));
                 for (var i = 0; i < count; i++)
                 {
-                    var candidate = Send(Send(Send(results, Sel("objectAtIndex:"), (nint)i), Sel("topCandidates:"), 1), Sel("firstObject"));
-                    if (candidate != 0 && Utf8String(Send(candidate, Sel("string"))) is { } line)
-                        lines.Add(line);
+                    var observation = Send(results, Sel("objectAtIndex:"), (nint)i);
+                    var candidate = Send(Send(observation, Sel("topCandidates:"), 1), Sel("firstObject"));
+                    if (candidate == 0 || Utf8String(Send(candidate, Sel("string"))) is not { } line)
+                        continue;
+                    var box = BoundingBox(observation);
+                    lines.Add(new RecognizedLine(line, box.X, box.Y, box.Width, box.Height));
                 }
-                return string.Join('\n', lines);
+                return lines;
             }
             finally
             {
@@ -63,6 +79,27 @@ public static class TextRecognizer
     }
 
     private static nint Sel(string name) => sel_registerName(name);
+
+    /// <summary>
+    /// The observation's boundingBox, a CGRect: returned in registers on Apple silicon, through a pointer
+    /// (objc_msgSend_stret) on Intel.
+    /// </summary>
+    private static CGRect BoundingBox(nint observation)
+    {
+        if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+            return SendRect(observation, Sel("boundingBox"));
+        SendRectStret(out var rect, observation, Sel("boundingBox"));
+        return rect;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly record struct CGRect(double X, double Y, double Width, double Height);
+
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    private static extern CGRect SendRect(nint receiver, nint selector);
+
+    [DllImport(ObjC, EntryPoint = "objc_msgSend_stret")]
+    private static extern void SendRectStret(out CGRect rect, nint receiver, nint selector);
 
     private static nint Utf8(string text, out nint buffer) => buffer = Marshal.StringToCoTaskMemUTF8(text);
 

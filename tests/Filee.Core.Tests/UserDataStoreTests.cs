@@ -1049,6 +1049,58 @@ public class UserDataStoreTests
         Assert.False(SettingsMigrations.ApplyToLibrary(29, presets, profiles)); // once only
     }
 
+    [Fact]
+    public void Version_30_libraries_get_searchable_pdf_first_in_the_text_group_once()
+    {
+        var presets = BuiltInData.CreatePresets();
+        presets.RemoveAll(p => p.Id == "searchable-pdf");
+        var text = presets.Single(p => p.Id == "pdf-text");
+        text.SubPresetIds.Remove("searchable-pdf");
+        var profiles = BuiltInData.CreateProfiles();
+
+        Assert.True(SettingsMigrations.ApplyToLibrary(30, presets, profiles));
+
+        Assert.Equal(BuiltInData.CreatePresets().Single(p => p.Id == "pdf-text").SubPresetIds, text.SubPresetIds);
+        Assert.True(presets.Single(p => p.Id == "searchable-pdf").Pdf.MakeSearchable);
+        Assert.False(SettingsMigrations.ApplyToLibrary(30, presets, profiles)); // once only
+    }
+
+    [Fact]
+    public void Version_31_settings_get_the_clipboard_shortcut_on_macos_once_and_never_over_a_taken_v()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Skip("The clipboard shortcut is macOS only.");
+            return;
+        }
+        using var dir = new TempDir();
+        var old = new UserDataStore(dir.Path);
+        old.Load();
+        old.Settings.Triggers.RemoveAll(t => t.Clipboard); // as written with schema 31
+        old.Settings.SchemaVersion = 31;
+        old.SaveSettings();
+
+        var store = new UserDataStore(dir.Path);
+        store.Load();
+        var clipboard = Assert.Single(store.Settings.Triggers, t => t.Clipboard);
+        Assert.Equal(("V", ModifierKeys.Ctrl | ModifierKeys.Alt, TriggerKind.KeyChord), (clipboard.Key, clipboard.Modifiers, clipboard.Kind));
+        store.SaveSettings();
+        var again = new UserDataStore(dir.Path);
+        again.Load();
+        Assert.Single(again.Settings.Triggers, t => t.Clipboard); // once
+
+        // A shortcut on V of the user's own: left as it is, no clipboard shortcut next to it.
+        var taken = new UserDataStore(Path.Combine(dir.Path, "taken"));
+        taken.Load();
+        taken.Settings.Triggers.RemoveAll(t => t.Clipboard);
+        taken.Settings.Triggers.Add(new TriggerGesture { Kind = TriggerKind.KeyChord, Modifiers = ModifierKeys.Ctrl, Key = "V" });
+        taken.Settings.SchemaVersion = 31;
+        taken.SaveSettings();
+        var kept = new UserDataStore(Path.Combine(dir.Path, "taken"));
+        kept.Load();
+        Assert.DoesNotContain(kept.Settings.Triggers, t => t.Clipboard);
+    }
+
     [Theory]
     [InlineData("200", 200)]
     [InlineData("200 KB", 200)]

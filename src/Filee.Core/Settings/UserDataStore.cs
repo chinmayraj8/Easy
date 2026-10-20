@@ -324,6 +324,11 @@ internal static class SettingsMigrations
         if (settings.SchemaVersion < 21)
             InsertBefore(settings.EnginePriority, "wic", settings.EnginePriority.Contains("ffmpeg") ? "ffmpeg" : "pandoc");
 
+        // v32 (macOS): Ctrl + Option + V opens the donut for the clipboard picture, unless that shortcut is taken.
+        if (settings.SchemaVersion < 32 && OperatingSystem.IsMacOS() && settings.Triggers.Count > 0
+            && !settings.Triggers.Any(t => t.Clipboard || (t.Kind == TriggerKind.KeyChord && t.Key == "V")))
+            settings.Triggers.Add(TriggerGesture.ClipboardDefault());
+
         if (settings.Triggers.Count == 0)
             settings.Triggers = TriggerGesture.Defaults();
 
@@ -637,6 +642,21 @@ internal static class SettingsMigrations
         // v30: two or more pictures merge into one PDF from the images donut (shown only when several are selected).
         if (from < 30)
             changed |= Offer(presets, profiles, "images", "merge-pdf", "to-pdf");
+        // v31: "Searchable PDF", first in the PDF donut's "Text" group when it has room.
+        if (from < 31)
+        {
+            foreach (var preset in BuiltInData.OcrPresets().Where(p => presets.All(existing => existing.Id != p.Id)))
+            {
+                presets.Add(preset);
+                changed = true;
+            }
+            if (presets.FirstOrDefault(p => p.Id == "pdf-text") is { Kind: PresetKind.Group } text
+                && !text.SubPresetIds.Contains("searchable-pdf") && text.SubPresetIds.Count < Preset.MaxSubPresets)
+            {
+                text.SubPresetIds.Insert(0, "searchable-pdf");
+                changed = true;
+            }
+        }
         return changed;
     }
 

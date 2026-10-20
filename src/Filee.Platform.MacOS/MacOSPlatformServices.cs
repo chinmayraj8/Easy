@@ -52,6 +52,38 @@ public sealed class MacOSPlatformServices : IPlatformServices
         }
     }
 
+    /// <summary>
+    /// Saves the picture on the clipboard as <paramref name="pathWithoutExtension"/> + ".png" (or ".tiff"). Returns the
+    /// file, or null when the clipboard holds no picture. Call it on the main thread.
+    /// </summary>
+    public string? SaveClipboardPicture(string pathWithoutExtension)
+    {
+        if (NativeMethods.ClipboardPicture() is not { } picture)
+            return null;
+        var path = $"{pathWithoutExtension}.{picture.Extension}";
+        File.WriteAllBytes(path, picture.Data);
+        return path;
+    }
+
+    /// <summary>The folder of the front Finder window, or the Desktop when none is open (Finder's insertion location).</summary>
+    public string FinderFolder()
+    {
+        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        try
+        {
+            var folder = Run("/usr/bin/osascript", ["-e", "tell application \"Finder\" to get POSIX path of (insertion location as alias)"], 10_000).Trim();
+            return Directory.Exists(folder) ? folder.TrimEnd('/') : desktop;
+        }
+        catch (Exception ex) when (ex is IOException or TimeoutException or InvalidOperationException)
+        {
+            Trace.TraceWarning($"Reading the Finder folder failed: {ex.Message}");
+            return desktop;
+        }
+    }
+
+    /// <summary>The system alert sound: a shortcut that found nothing to act on.</summary>
+    public void Beep() => NativeMethods.NSBeep();
+
     // AppKit exposes no public system drag-distance preference; match its usual four-point threshold.
     public int SystemDragThreshold => 4;
 

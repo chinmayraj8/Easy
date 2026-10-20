@@ -36,6 +36,7 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
 
     public Task<IReadOnlyList<string>> ConvertAsync(ConversionStep step, IProgress<double>? progress, CancellationToken cancellationToken) =>
         step.From != "pdf" ? Task.Run(() => ImageToPdf(step, progress, cancellationToken), cancellationToken)
+        : step.Preset.Pdf.MakeSearchable ? Task.Run(() => SearchablePdf.Write(step, progress, cancellationToken), cancellationToken)
         : step.Preset.Pdf.Unlock || step.Preset.Pdf.Protect ? Task.Run(() => UnlockOrProtect(step), cancellationToken)
         : step.Preset.Pdf.Compression == PdfCompression.None ? Task.Run(() => SplitOrExtract(step, progress, cancellationToken), cancellationToken)
         : Task.Run(() => CompressAsync(step, progress, cancellationToken), cancellationToken);
@@ -171,8 +172,10 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
     private static IReadOnlyList<string> SplitOrExtract(ConversionStep step, IProgress<double>? progress, CancellationToken ct)
     {
         using var source = Open(step.InputPath, PdfDocumentOpenMode.Import);
-        var pages = step.Preset.Pdf.Reorder ? Reordered(step.Preset.Pdf.PageOrder, source.PageCount)
-            : PageRange.Parse(step.Preset.Pdf.PageRange, source.PageCount);
+        var arranged = step.Preset.Pdf.Reorder
+            ? Arranged(step.Preset.Pdf.PageOrder, source.PageCount, step.Preset.Pdf.DropUnlisted)
+            : PageRange.Parse(step.Preset.Pdf.PageRange, source.PageCount).Select(i => (Index: i, Rotation: 0)).ToList();
+        var pages = arranged.Select(p => p.Index).ToList();
         var written = new List<string>();
 
         if (step.Preset.Pdf.SplitPages)
@@ -197,8 +200,12 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
         }
 
         using var extract = new PdfDocument();
-        foreach (var index in pages)
-            extract.AddPage(source.Pages[index]);
+        foreach (var (index, rotation) in arranged)
+        {
+            var page = extract.AddPage(source.Pages[index]);
+            if (rotation != 0)
+                page.Rotate = (page.Rotate + rotation) % 360;
+        }
         var output = step.Output.Allocate("pdf");
         if (output is null)
             return [];
@@ -219,26 +226,32 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
                 .ToList();
 
     /// <summary>
-    /// Every page once, zero-based, in the order of <paramref name="expression"/> ("3, 1-2", "10-1" reversed); the pages
-    /// it leaves out follow in their order. Out-of-range pages are clamped, unreadable parts ignored.
+    /// Every page once, zero-based, in the order of <paramref name="expression"/> ("3, 1-2", "10-1" reversed), each
+    /// turned clockwise by its part's "@90", "@180" or "@270" ("@-90" is "@270"; any other angle leaves it as it is). The
+    /// pages it leaves out follow in their order, or are dropped with <paramref name="dropUnlisted"/> (when it lists any).
+    /// Out-of-range pages are clamped, unreadable parts ignored.
     /// </summary>
-    internal static List<int> Reordered(string expression, int pageCount)
+    internal static List<(int Index, int Rotation)> Arranged(string expression, int pageCount, bool dropUnlisted)
     {
-        var order = new List<int>();
+        var pages = new List<(int Index, int Rotation)>();
         if (pageCount <= 0)
-            return order;
+            return pages;
         foreach (var part in expression.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            var dash = part.IndexOf('-');
-            if (!TryPage(dash < 0 ? part : part[..dash], 1, out var from) || !TryPage(dash < 0 ? part : part[(dash + 1)..], pageCount, out var to))
+            var at = part.IndexOf('@');
+            var range = at < 0 ? part : part[..at];
+            var rotation = at >= 0 && int.TryParse(part[(at + 1)..], out var degrees) && degrees % 90 == 0 ? (degrees % 360 + 360) % 360 : 0;
+            var dash = range.IndexOf('-');
+            if (!TryPage(dash < 0 ? range : range[..dash], 1, out var from) || !TryPage(dash < 0 ? range : range[(dash + 1)..], pageCount, out var to))
                 continue;
             var step = from <= to ? 1 : -1;
             for (var p = from; p != to + step; p += step)
-                if (!order.Contains(p - 1))
-                    order.Add(p - 1);
+                if (pages.All(x => x.Index != p - 1))
+                    pages.Add((p - 1, rotation));
         }
-        order.AddRange(Enumerable.Range(0, pageCount).Except(order));
-        return order;
+        if (!dropUnlisted || pages.Count == 0)
+            pages.AddRange(Enumerable.Range(0, pageCount).Where(i => pages.All(x => x.Index != i)).Select(i => (i, 0)));
+        return pages;
 
         bool TryPage(string text, int empty, out int page)
         {
@@ -251,6 +264,10 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
             return true;
         }
     }
+
+    /// <summary>The pages in the order of <paramref name="expression"/>, the others after them (see <see cref="Arranged"/>).</summary>
+    internal static List<int> Reordered(string expression, int pageCount) =>
+        Arranged(expression, pageCount, dropUnlisted: false).Select(p => p.Index).ToList();
 
     /// <summary>
     /// PDF → a smaller PDF (<see cref="PdfOptions.Compression"/>), also with a page range or one file per page: the whole

@@ -4,7 +4,7 @@
 
 using System.Diagnostics;
 using Filee.Core.Formats;
-using Filee.Platform.MacOS;
+using Filee.Engines.Ocr;
 using ImageMagick;
 using Microsoft.Extensions.Logging;
 using PDFtoImage;

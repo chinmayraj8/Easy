@@ -75,6 +75,7 @@ public static class BuiltInData
             Pdf = { SplitPages = true }, Output = { Location = OutputLocation.Subfolder, SubfolderName = "{name}" },
         },
         .. PagePresets(),
+        .. OcrPresets(),
         .. PdfCompressionPresets(),
         .. PdfSlidesPresets(),
         .. FramePresets(),
@@ -426,17 +427,27 @@ public static class BuiltInData
         new()
         {
             Id = "pdf-text", NameKey = "preset.group_text", TargetFormat = Preset.GroupTarget, Kind = PresetKind.Group,
-            SubPresetIds = ["to-txt", "to-md", "to-epub"],
+            SubPresetIds = ["searchable-pdf", "to-txt", "to-md", "to-epub"],
         },
     ];
 
-    /// <summary>Reorder PDF pages, and the "Pages" group that holds it with "Split PDF" (added in settings schema 29).</summary>
+    /// <summary>"Searchable PDF": scanned pages get their text (added in settings schema 31, first in the "Text" group).</summary>
+    public static IEnumerable<Preset> OcrPresets() =>
+    [
+        new()
+        {
+            Id = "searchable-pdf", NameKey = "preset.searchable_pdf", TargetFormat = "pdf",
+            Pdf = { MakeSearchable = true }, Output = { FileNamePattern = "{name}_searchable" },
+        },
+    ];
+
+    /// <summary>Edit PDF pages (order, turn, leave out), and the "Pages" group that holds it with "Split PDF" (added in settings schema 29).</summary>
     public static IEnumerable<Preset> PagePresets() =>
     [
         new()
         {
             Id = "reorder-pdf", NameKey = "preset.reorder_pdf", TargetFormat = "pdf",
-            Pdf = { Reorder = true }, Output = { FileNamePattern = "{name}_reordered" },
+            Pdf = { Reorder = true }, Output = { FileNamePattern = "{name}_edited" },
         },
         new()
         {

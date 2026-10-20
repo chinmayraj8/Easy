@@ -180,6 +180,79 @@ internal static class NativeMethods
         public double X, Y, Width, Height;
     }
 
+    /// <summary>
+    /// The picture on the clipboard, as PNG or else TIFF bytes (a screenshot holds both), or null. A file copied in
+    /// Finder is no picture: its clipboard also holds the file's icon as TIFF, which must not pass for it.
+    /// </summary>
+    /// <param name="pasteboard">A named pasteboard instead of the clipboard (tests leave the user's clipboard alone).</param>
+    internal static (byte[] Data, string Extension)? ClipboardPicture(string? pasteboard = null)
+    {
+        _ = AppKit; // NSPasteboard is AppKit's: loaded before its class is looked up
+        var pool = objc_autoreleasePoolPush();
+        try
+        {
+            var board = pasteboard is null
+                ? Send(objc_getClass("NSPasteboard"), sel_registerName("generalPasteboard"))
+                : WithName(pasteboard);
+            if (Text(board, "public.file-url") != 0)
+                return null;
+            foreach (var (type, extension) in new[] { ("public.png", "png"), ("public.tiff", "tiff") })
+            {
+                var data = Text(board, type, data: true);
+                if (data == 0)
+                    continue;
+                var length = (int)Send(data, sel_registerName("length"));
+                if (length == 0)
+                    continue;
+                var bytes = new byte[length];
+                Marshal.Copy(Send(data, sel_registerName("bytes")), bytes, 0, length);
+                return (bytes, extension);
+            }
+            return null;
+        }
+        finally
+        {
+            objc_autoreleasePoolPop(pool);
+        }
+
+        static nint WithName(string name)
+        {
+            var text = CFStringCreateWithCString(0, name, 0x08000100);
+            try
+            {
+                return Send(objc_getClass("NSPasteboard"), sel_registerName("pasteboardWithName:"), text);
+            }
+            finally
+            {
+                CFRelease(text);
+            }
+        }
+
+        // [board stringForType:] or [board dataForType:]: the clipboard's content of that type, or 0.
+        static nint Text(nint board, string type, bool data = false)
+        {
+            var name = CFStringCreateWithCString(0, type, 0x08000100); // a CFString is an NSString
+            try
+            {
+                return Send(board, sel_registerName(data ? "dataForType:" : "stringForType:"), name);
+            }
+            finally
+            {
+                CFRelease(name);
+            }
+        }
+    }
+
+    /// <summary>The system alert sound.</summary>
+    [DllImport("/System/Library/Frameworks/AppKit.framework/AppKit")]
+    internal static extern void NSBeep();
+
+    [DllImport(ObjC)]
+    private static extern nint objc_autoreleasePoolPush();
+
+    [DllImport(ObjC)]
+    private static extern void objc_autoreleasePoolPop(nint pool);
+
     [DllImport(ApplicationServices)]
     [return: MarshalAs(UnmanagedType.I1)]
     internal static extern bool AXIsProcessTrusted();

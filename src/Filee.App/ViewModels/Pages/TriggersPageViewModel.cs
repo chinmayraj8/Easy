@@ -34,6 +34,7 @@ public sealed partial class TriggerGestureViewModel : ObservableObject
         Scopes = Enum.GetValues<TriggerScope>()
             .Select(s => new Choice<TriggerScope>(s, loc[s == TriggerScope.FileManager ? $"triggers.scope.{s}{platform}" : $"triggers.scope.{s}"]))
             .ToList();
+        ClipboardLabel = loc["triggers.clipboard"];
         RecordLabel = loc["triggers.record"];
         RecordingLabel = loc["triggers.recording"];
         SystemLabel = loc["triggers.threshold_system"];
@@ -83,7 +84,10 @@ public sealed partial class TriggerGestureViewModel : ObservableObject
     public bool UsesHold => Kind.Value == TriggerKind.Hold;
     public string KeyText => IsRecording ? RecordingLabel : string.IsNullOrEmpty(Key) ? "—" : Key;
     public string ThresholdText => DragThreshold == 0 ? SystemLabel : $"{DragThreshold}px";
-    public string Summary => GestureText.Describe(_gesture);
+    public string Summary => GestureText.Describe(_gesture)
+        + (_gesture is { Kind: TriggerKind.KeyChord, Clipboard: true } ? " · " + ClipboardLabel : "");
+
+    private string ClipboardLabel { get; }
 
     // Runs before OnPropertyChanged below, which reads every choice.
     partial void OnKindChanged(Choice<TriggerKind>? oldValue, Choice<TriggerKind> newValue) => Choices.Restore(oldValue, newValue, v => Kind = v);

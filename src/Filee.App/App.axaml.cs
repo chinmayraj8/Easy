@@ -21,6 +21,36 @@ public partial class App : Application
 {
     private readonly List<string> _pendingConvertFiles = [];
     private IDisposable? _convertDebounce;
+    /// <summary>
+    /// The clipboard shortcut: the picture in the clipboard (a screenshot) is saved as "Screenshot 2026-10-20 at
+    /// 20.15.32.png" in a folder of its own, and the donut opens for it; what it is converted to goes into the front
+    /// Finder window's folder. Without a picture in the clipboard, the alert sound says so.
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    private async Task ShowClipboardDonutAsync(Filee.Platform.MacOS.MacOSPlatformServices mac, RadialController radial, int x, int y)
+    {
+        var folder = await Task.Run(mac.FinderFolder);
+        var root = Path.Combine(Path.GetTempPath(), "Easy-clipboard");
+        // Pictures of earlier shortcuts, their conversions long done.
+        foreach (var old in Directory.Exists(root) ? Directory.GetDirectories(root) : [])
+        {
+            if (Directory.GetCreationTimeUtc(old) < DateTime.UtcNow.AddHours(-1))
+            {
+                try { Directory.Delete(old, recursive: true); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
+        }
+        var here = Directory.CreateDirectory(Path.Combine(root, Guid.NewGuid().ToString("N")[..8])).FullName;
+        var now = DateTime.Now;
+        if (mac.SaveClipboardPicture(Path.Combine(here, $"Screenshot {now:yyyy-MM-dd} at {now:HH.mm.ss}")) is not { } picture)
+        {
+            AppHost.Get<ILogger<App>>().LogInformation("The clipboard shortcut found no picture in the clipboard");
+            mac.Beep();
+            return;
+        }
+        radial.ShowForClipboard(x, y, picture, folder);
+    }
+
     private bool _selectionPending;
 
     /// <summary>Forwarded launches and empty selections can come in bursts: a few lines a minute are enough.</summary>
@@ -84,6 +114,12 @@ public partial class App : Application
             _selectionPending = true;
             try
             {
+                if (e.Gesture is { Kind: TriggerKind.KeyChord, Clipboard: true })
+                {
+                    if (OperatingSystem.IsMacOS() && platform is Filee.Platform.MacOS.MacOSPlatformServices mac)
+                        await ShowClipboardDonutAsync(mac, radial, e.X, e.Y);
+                    return;
+                }
                 var files = OperatingSystem.IsMacOS()
                     ? await Task.Run(platform.GetFileManagerSelection) : platform.GetFileManagerSelection();
                 if (files.Count > 0 && !store.Settings.Paused)

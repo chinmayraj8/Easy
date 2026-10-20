@@ -402,6 +402,35 @@ public class ImageAndPdfTests(EngineFixture fx) : IClassFixture<EngineFixture>
     public void Reordered_pages_take_each_page_once(string order, int[] expected) =>
         Assert.Equal(expected, PdfSharpConverter.Reordered(order, 5));
 
+    [Theory]
+    [InlineData("3@90, 1-2", false, "2@90 0 1 3 4")]
+    [InlineData("3,1", true, "2 0")]
+    [InlineData("2@270, 4@-90, 5@180, 1@45", true, "1@270 3@270 4@180 0")] // -90 is 270; 45 isn't a turn: not turned
+    [InlineData("5-4@90", true, "4@90 3@90")]
+    [InlineData("", true, "0 1 2 3 4")] // nothing listed: nothing is dropped
+    public void Arranged_pages_can_be_turned_and_left_out(string order, bool dropUnlisted, string expected) =>
+        Assert.Equal(expected, string.Join(' ', PdfSharpConverter.Arranged(order, 5, dropUnlisted)
+            .Select(p => p.Rotation == 0 ? $"{p.Index}" : $"{p.Index}@{p.Rotation}")));
+
+    [Fact]
+    public async Task Edited_pdf_drops_and_turns_pages()
+    {
+        var dir = fx.NewFolder();
+        var pdf = (await fx.ConvertAsync([EngineFixture.MakeMultiPageTiff(dir, 3)], new Preset { TargetFormat = "pdf" })).Outputs.Single();
+
+        var job = await fx.ConvertAsync([pdf], new Preset
+        {
+            TargetFormat = "pdf",
+            Pdf = { Reorder = true, PageOrder = "3@90,1", DropUnlisted = true },
+        });
+
+        AssertDone(job);
+        using var result = PdfReader.Open(job.Outputs.Single(), PdfDocumentOpenMode.Import);
+        Assert.Equal(2, result.PageCount);
+        Assert.Equal(90, result.Pages[0].Rotate);
+        Assert.Equal(0, result.Pages[1].Rotate);
+    }
+
     [Fact]
     public async Task Reorder_pdf_keeps_every_page()
     {
