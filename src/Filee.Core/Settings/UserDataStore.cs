@@ -634,6 +634,9 @@ internal static class SettingsMigrations
             }
             changed |= Swap(profiles.FirstOrDefault(p => p.Id == "pdf"), "pdf-split", "pdf-pages");
         }
+        // v30: two or more pictures merge into one PDF from the images donut (shown only when several are selected).
+        if (from < 30)
+            changed |= Offer(presets, profiles, "images", "merge-pdf", "to-pdf");
         return changed;
     }
 

@@ -328,7 +328,7 @@ public static class BuiltInData
         {
             Id = "images", NameKey = "profile.images",
             Extensions = ExtensionsOf(FormatCategory.Image),
-            PresetIds = ["to-png", "to-jpg", "to-webp", "to-pdf", "trace-svg", "trace-line-art", "half-size", "compress-images", "copy-text", "hide"],
+            PresetIds = ["to-png", "to-jpg", "to-webp", "to-pdf", "merge-pdf", "trace-svg", "trace-line-art", "half-size", "compress-images", "copy-text", "hide"],
         },
         new()
         {

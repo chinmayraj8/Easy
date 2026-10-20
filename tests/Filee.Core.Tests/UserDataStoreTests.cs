@@ -588,7 +588,7 @@ public class UserDataStoreTests
         presets.RemoveAll(p => p.Id is "trace-svg" or "trace-line-art");
         var profiles = BuiltInData.CreateProfiles();
         var images = profiles.Single(p => p.Id == "images");
-        images.PresetIds.RemoveAll(id => id is "trace-svg" or "trace-line-art");
+        images.PresetIds.RemoveAll(id => id is "trace-svg" or "trace-line-art" or "merge-pdf"); // merge-pdf: schema 30
 
         Assert.True(SettingsMigrations.ApplyToLibrary(15, presets, profiles));
 
@@ -1033,6 +1033,20 @@ public class UserDataStoreTests
         Assert.Equal(BuiltInData.PdfDonut, pdf.PresetIds);
         Assert.Contains(presets, p => p.Id == "reorder-pdf");
         Assert.False(SettingsMigrations.ApplyToLibrary(28, presets, profiles)); // once only
+    }
+
+    [Fact]
+    public void Version_29_libraries_get_merge_pdf_on_the_images_donut_after_pdf_once()
+    {
+        var presets = BuiltInData.CreatePresets();
+        var profiles = BuiltInData.CreateProfiles();
+        var images = profiles.Single(p => p.Id == "images");
+        images.PresetIds.Remove("merge-pdf");
+
+        Assert.True(SettingsMigrations.ApplyToLibrary(29, presets, profiles));
+
+        Assert.Equal(BuiltInData.CreateProfiles().Single(p => p.Id == "images").PresetIds, images.PresetIds);
+        Assert.False(SettingsMigrations.ApplyToLibrary(29, presets, profiles)); // once only
     }
 
     [Theory]
