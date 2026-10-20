@@ -1,4 +1,6 @@
-// System tray icon: open settings, pause gestures, open or lock the hidden files, install a new version, quit.
+// System tray icon: open settings, pause gestures, install a new version, quit. The hidden files ("Storage") are opened,
+// locked and given a new password from it too, but those items show only while ⌥ Option is held as the menu opens: a
+// plain click never shows them.
 
 using Avalonia;
 using Avalonia.Controls;
@@ -44,6 +46,8 @@ public sealed class TrayService(UserDataStore store, ILocalizer loc, WindowServi
             IsVisible = true,
         };
         _tray.Clicked += (_, _) => windows.ShowMain();
+        // Asked each time before the menu shows.
+        _tray.Menu.NeedsUpdate += (_, _) => _vault.IsVisible = _vaultPassword.IsVisible = vault.Exists && Platform.MacOS.OptionKey.IsDown;
         TrayIcon.SetIcons(app, [_tray]);
 
         Refresh();
@@ -76,9 +80,10 @@ public sealed class TrayService(UserDataStore store, ILocalizer loc, WindowServi
         _open!.Header = loc["tray.open"];
         _pause!.Header = store.Settings.Paused ? loc["tray.resume"] : loc["tray.pause"];
         _quit!.Header = loc["tray.quit"];
-        // Hidden files: only once there are some (the first "Hide" makes the vault).
+        // Hidden files: only once there are some (the first "Hide" makes the vault), and shown only with ⌥ Option.
         if (vault.Exists && !menu.Items.Contains(_vault!))
         {
+            _vault!.IsVisible = _vaultPassword!.IsVisible = false;
             menu.Items.Insert(menu.Items.IndexOf(_pause) + 1, _vault!);
             menu.Items.Insert(menu.Items.IndexOf(_vault!) + 1, _vaultPassword!);
         }
