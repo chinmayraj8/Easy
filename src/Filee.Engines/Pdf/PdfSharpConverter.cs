@@ -113,11 +113,17 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
     private static IReadOnlyList<string> UnlockOrProtect(ConversionStep step)
     {
         var options = step.Preset.Pdf;
-        var password = options.Unlock ? options.Password : null;
+        // The password is asked on the donut and never saved: a watch folder or the CLI has none. Say so, rather than
+        // PDFsharp's "conversion failed".
+        if (string.IsNullOrEmpty(options.Password))
+            throw new ConversionRefusedException("error.needs_password");
+        // Unlock opens with the password; Protect opens a file that has none.
+        PdfDocument OpenAs(PdfDocumentOpenMode mode) =>
+            options.Unlock ? PdfReader.Open(step.InputPath, options.Password, mode) : PdfReader.Open(step.InputPath, mode);
         PdfDocument document;
         try
         {
-            document = PdfReader.Open(step.InputPath, password, PdfDocumentOpenMode.Modify);
+            document = OpenAs(PdfDocumentOpenMode.Modify);
         }
         catch (PdfReaderException ex) when (ex.Message.Contains("owner", StringComparison.OrdinalIgnoreCase))
         {
@@ -126,7 +132,7 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
             document = new PdfDocument();
             try
             {
-                using var source = PdfReader.Open(step.InputPath, password, PdfDocumentOpenMode.Import);
+                using var source = OpenAs(PdfDocumentOpenMode.Import);
                 foreach (var page in source.Pages)
                     document.AddPage(page);
             }

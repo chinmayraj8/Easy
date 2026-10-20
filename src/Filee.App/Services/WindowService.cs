@@ -250,13 +250,13 @@ public sealed class WindowService(ILocalizer loc, IServiceProvider services, Mem
         services.GetRequiredService<UpdateService>().OpenDownloadPage();
     }
 
+    /// <summary>The pages of <paramref name="pdf"/> to drag into a new order (see <see cref="PageOrderWindow"/>).</summary>
+    public Task<string?> PickPageOrderAsync(string pdf) => PageOrderWindow.PickAsync(loc, pdf);
+
     /// <summary>
     /// Asks for a line of text (localization keys; <paramref name="secret"/> hides what is typed). Returns it trimmed (a
     /// password as typed), or null when cancelled.
     /// </summary>
-    /// <summary>The pages of <paramref name="pdf"/> to drag into a new order (see <see cref="PageOrderWindow"/>).</summary>
-    public Task<string?> PickPageOrderAsync(string pdf) => PageOrderWindow.PickAsync(loc, pdf);
-
     public async Task<string?> AskTextAsync(Window? owner, string questionKey, string hintKey, bool secret = false)
     {
         var input = new TextBox { PlaceholderText = loc[hintKey], PasswordChar = secret ? '•' : default };

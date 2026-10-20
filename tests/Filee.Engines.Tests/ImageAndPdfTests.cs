@@ -410,7 +410,9 @@ public class ImageAndPdfTests(EngineFixture fx) : IClassFixture<EngineFixture>
 
         var job = await fx.ConvertAsync([pdf], new Preset
         {
-            TargetFormat = "pdf", Pdf = { Reorder = true, PageOrder = "3-1" }, Output = { FileNamePattern = "{name}_reordered" },
+            TargetFormat = "pdf",
+            Pdf = { Reorder = true, PageOrder = "3-1" },
+            Output = { FileNamePattern = "{name}_reordered" },
         });
 
         AssertDone(job);
@@ -436,6 +438,32 @@ public class ImageAndPdfTests(EngineFixture fx) : IClassFixture<EngineFixture>
         AssertDone(unlock);
         using var open = PdfReader.Open(unlock.Outputs.Single(), PdfDocumentOpenMode.Import);
         Assert.Equal(2, open.PageCount);
+    }
+
+    [Fact]
+    public async Task Protect_without_a_password_is_refused_not_written_unprotected()
+    {
+        // Run from a watch folder or the CLI there is no password to ask for (it is never saved).
+        var dir = fx.NewFolder();
+        var pdf = (await fx.ConvertAsync([EngineFixture.MakeMultiPageTiff(dir, 1)], new Preset { TargetFormat = "pdf" })).Outputs.Single();
+
+        var job = await fx.ConvertAsync([pdf], new Preset { TargetFormat = "pdf", Pdf = { Protect = true } });
+
+        Assert.Equal("error.needs_password", job.Files.Single().ErrorKey);
+        Assert.Empty(job.Outputs);
+    }
+
+    [Fact]
+    public async Task Compress_to_a_size_never_asked_is_refused_not_saved_uncompressed()
+    {
+        // Run from a watch folder or the CLI there is nobody to ask for the size.
+        var dir = fx.NewFolder();
+        var photo = EngineFixture.MakeImage(dir, "photo.jpg", MagickFormat.Jpeg);
+
+        var job = await fx.ConvertAsync([photo], new Preset { TargetFormat = BuiltInData.SameAsSource, MaxSizeKb = Preset.AskSize });
+
+        Assert.Equal("error.needs_size", job.Files.Single().ErrorKey);
+        Assert.Empty(job.Outputs);
     }
 
     [Fact]

@@ -115,7 +115,11 @@ public sealed class JobQueue : IAsyncDisposable
                     new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = CancellationToken.None },
                     async (item, _) =>
                     {
-                        if (job.Preset.MaxSizeKb > 0)
+                        // "To a size" asks for the size on the donut; a watch folder or the CLI has none, and would
+                        // otherwise save an uncompressed copy named "_compressed".
+                        if (job.Preset.MaxSizeKb == Preset.AskSize)
+                            FailFile(job, item.File, "error.needs_size");
+                        else if (job.Preset.MaxSizeKb > 0)
                             await RunToSizeAsync(job, item.File, item.Index, planner, workDir);
                         else
                             await RunFileAsync(job, item.File, item.Index, planner, workDir, finalOutput: true);
@@ -235,10 +239,13 @@ public sealed class JobQueue : IAsyncDisposable
     }
 
     /// <summary>A file that would be used as it is although the preset turns or mirrors it.</summary>
-    private void FailUnturned(ConversionJob job, FileResult file, string detail)
+    private void FailUnturned(ConversionJob job, FileResult file, string detail) =>
+        FailFile(job, file, "error.cannot_turn", detail);
+
+    private void FailFile(ConversionJob job, FileResult file, string key, string? detail = null)
     {
         file.State = FileState.Failed;
-        file.ErrorKey = "error.cannot_turn";
+        file.ErrorKey = key;
         file.ErrorDetail = detail;
         file.Progress = 1;
         Notify(job);

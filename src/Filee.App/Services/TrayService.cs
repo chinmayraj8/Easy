@@ -77,7 +77,7 @@ public sealed class TrayService(UserDataStore store, ILocalizer loc, WindowServi
         _pause!.Header = store.Settings.Paused ? loc["tray.resume"] : loc["tray.pause"];
         _quit!.Header = loc["tray.quit"];
         // Hidden files: only once there are some (the first "Hide" makes the vault).
-        if (vault.Exists && !menu.Items.Contains(_vault))
+        if (vault.Exists && !menu.Items.Contains(_vault!))
         {
             menu.Items.Insert(menu.Items.IndexOf(_pause) + 1, _vault!);
             menu.Items.Insert(menu.Items.IndexOf(_vault!) + 1, _vaultPassword!);

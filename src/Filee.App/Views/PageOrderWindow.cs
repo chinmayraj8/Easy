@@ -78,7 +78,12 @@ public sealed class PageOrderWindow : Window
         root.Children.Add(_scroll);
         Content = root;
 
-        Closed += (_, _) => _rendering.Cancel();
+        Closed += (_, _) =>
+        {
+            _rendering.Cancel();
+            foreach (var tile in _pages.Children)
+                (ImageOf((int)tile.Tag!).Source as IDisposable)?.Dispose();
+        };
         _ = Task.Run(() => Render(pdf, _rendering.Token));
     }
 
@@ -165,7 +170,13 @@ public sealed class PageOrderWindow : Window
                 {
                     var thumb = new Bitmap(data.AsStream());
                     var index = page++;
-                    Dispatcher.UIThread.Post(() => ImageOf(index).Source = thumb);
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (ct.IsCancellationRequested)
+                            thumb.Dispose();
+                        else
+                            ImageOf(index).Source = thumb;
+                    });
                 }
             }
         }

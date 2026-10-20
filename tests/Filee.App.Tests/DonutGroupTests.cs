@@ -140,8 +140,10 @@ public class DonutGroupTests
         donut.SetExternalHit(donut.HitTest(inner), inner);
         donut.ExpandPendingGroup();
 
-        // The mouse comes onto the ring first: right after another test's click, a headless press with no move before it
-        // can miss the donut.
+        // Avalonia's headless input drops the first right-button press of a new window: one goes to an empty corner,
+        // then the mouse comes onto the ring before the press.
+        window.MouseDown(new Point(1, 1), MouseButton.Right);
+        window.MouseUp(new Point(1, 1), MouseButton.Right);
         window.MouseMove(OnRing(donut, 2));
         window.MouseDown(OnRing(donut, 2), MouseButton.Right);
         window.MouseUp(OnRing(donut, 2), MouseButton.Right);

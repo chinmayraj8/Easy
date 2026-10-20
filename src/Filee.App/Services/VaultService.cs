@@ -90,13 +90,29 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
         var hidden = 0;
         foreach (var path in paths)
         {
+            if (HoldsEasyData(path))
+            {
+                log.LogWarning("Not hiding {Path}: Easy's data folder (with the vault itself) is in it", path);
+                continue;
+            }
             if (await MoveAsync(path, MountPoint) is not { } moved)
                 continue;
             origins[Path.GetFileName(moved)] = Path.GetFullPath(path.TrimEnd('/'));
+            WriteOrigins(origins); // after each one: a later failure must not lose where this one came from
             hidden++;
         }
-        WriteOrigins(origins);
         return hidden;
+    }
+
+    /// <summary>
+    /// True for Easy's data folder, a path in it, or a folder holding it: moved into the vault, it would copy the vault
+    /// into itself and then delete it.
+    /// </summary>
+    private bool HoldsEasyData(string path)
+    {
+        var full = Path.GetFullPath(path).TrimEnd('/') + "/";
+        var data = Path.GetFullPath(store.Directory).TrimEnd('/') + "/";
+        return data.StartsWith(full, StringComparison.Ordinal) || full.StartsWith(data, StringComparison.Ordinal);
     }
 
     /// <summary>True when every path is in the open vault: the donut offers "Unhide" for them.</summary>
@@ -117,14 +133,22 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
             var folder = origins.TryGetValue(name, out var origin)
                 ? Path.GetDirectoryName(origin)!
                 : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-            Directory.CreateDirectory(folder);
+            try
+            {
+                Directory.CreateDirectory(folder);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                log.LogWarning(ex, "Can't make {Folder} again; {Name} stays hidden", folder, name);
+                continue;
+            }
             // Back under its own name when that is free ("photo (2).jpg" in the vault was "photo.jpg").
             if (await MoveAsync(path, folder, origin is null ? null : Path.GetFileName(origin)) is null)
                 continue;
             origins.Remove(name);
+            WriteOrigins(origins);
             restored++;
         }
-        WriteOrigins(origins);
         return restored;
     }
 
@@ -144,10 +168,26 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
             log.LogWarning("Moving {Path} failed; the original stays where it is", path);
             return null;
         }
-        if (Directory.Exists(path))
-            Directory.Delete(path, recursive: true);
-        else
-            File.Delete(path);
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+            else
+                File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A file is deleted whole or not at all: it stays, its copy goes. A folder may be partly gone by now, so its
+            // complete copy is kept.
+            if (Directory.Exists(path))
+            {
+                log.LogWarning(ex, "Part of {Path} couldn't be removed after it was copied; the copy is kept", path);
+                return target;
+            }
+            log.LogWarning(ex, "{Path} couldn't be removed after it was copied; it stays where it is", path);
+            File.Delete(target);
+            return null;
+        }
         return target;
     }
 

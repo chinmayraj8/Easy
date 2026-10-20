@@ -29,12 +29,18 @@ public class DonutHighlightTests
         Set(donut, "_lastTick", Environment.TickCount64 - DonutMenu.StalledLoopMs * 4);
 
         donut.SetExternalHighlight(2);
-        for (var i = 0; i < 90 && donut.LitAmount(2) < 0.9; i++)
+        // Frames come again: the stalled loop was replaced, so the slice starts lighting up.
+        for (var i = 0; i < 10 && donut.LitAmount(2) == 0; i++)
         {
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
+        Assert.True(donut.LitAmount(2) > 0, "no frame came after the stalled loop");
 
+        // Then it lights up fully. Forced ticks follow each other in microseconds (the frame time is the real clock),
+        // so the rest of the animation is stepped in 60 Hz frames rather than by tick count.
+        for (var i = 0; i < 120 && donut.LitAmount(2) < 0.9; i++)
+            donut.Advance(1 / 60.0);
         Assert.True(donut.LitAmount(2) > 0.9, $"lit {donut.LitAmount(2):0.00}");
         window.Close();
     }

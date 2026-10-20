@@ -654,6 +654,8 @@
   "donut.not_unhidden": "Couldn't unhide",
   "error.needs_macos": "Needs macOS",
   "error.wrong_password": "That password doesn't open this PDF",
+  "error.needs_password": "Needs a password: run it from the donut, which asks for one",
+  "error.needs_size": "Needs a size: run it from the donut, which asks for one",
   "notice.size_not_reached": "Couldn't get it that small; this is the smallest it got",
   "split.parts_question": "Split into which parts? Each part becomes its own PDF. Leave empty for one PDF per page.",
   "split.parts_hint": "e.g. 1-3, 4-8, 9-",
