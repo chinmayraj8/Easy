@@ -1,0 +1,1 @@
+Under the hood, Easy plans a route between formats, including conversions with intermediate steps. A job queue manages engine concurrency, and engine priority resolves competing choices. Built in, bundled, and optional tools work together behind the same interface.

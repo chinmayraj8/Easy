@@ -1,0 +1,1 @@
+Conversion runs locally, without uploading your files. Once the required engines are available, conversion works offline. Results normally appear beside the originals, with configurable destinations. Source files are protected from overwrite. Optional engine downloads still need an internet connection.

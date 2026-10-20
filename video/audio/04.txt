@@ -1,0 +1,1 @@
+Easy adds an ONLYOFFICE integration. With Desktop Editors installed and opened once on your Mac, Word, PowerPoint, and Excel files can become PDFs through its rendering engine. Font checks and conversion logs help identify substitutions that may affect the result.

@@ -1,0 +1,1 @@
+Drop several files to process them in parallel. Watch folders automatically convert new arrivals. The filee command line exposes the same engines and presets for scripts. Progress and recent conversions help you follow the work from start to finish.

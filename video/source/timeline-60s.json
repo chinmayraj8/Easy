@@ -1,0 +1,109 @@
+[
+  {
+    "title": "Meet Easy.",
+    "tag": "FILE CONVERSION, REIMAGINED",
+    "kind": "hero",
+    "voice": "Meet Easy. A desktop file converter that brings the right format to your cursor. Built on the open source Filee project, this customized Mac app turns everyday conversion into a simple gesture.",
+    "labels": [
+      "Drag.",
+      "Drop.",
+      "Converted."
+    ],
+    "duration": 4
+  },
+  {
+    "title": "A gesture. A new format.",
+    "tag": "01 / THE CORE EXPERIENCE",
+    "kind": "donut",
+    "voice": "Hold Option, drag a file, and choose a format from the ring. Drop onto your choice, and Easy starts converting. The available choices adapt to your files, so your workflow stays focused.",
+    "labels": [
+      "Hold Option",
+      "Drag your file",
+      "Drop on PNG"
+    ],
+    "duration": 8
+  },
+  {
+    "title": "One workflow. Many file types.",
+    "tag": "02 / CAPABILITIES",
+    "kind": "formats",
+    "voice": "Images, documents, spreadsheets, presentations, and PDFs share one workflow. The engine catalog also covers e books, archives, subtitles, fonts, structured data, CAD drawings, and three dimensional models. Support depends on the format, route, and available engine.",
+    "labels": [
+      "Images",
+      "Documents",
+      "Spreadsheets",
+      "Presentations",
+      "PDF",
+      "E-books",
+      "Archives",
+      "Subtitles",
+      "Fonts",
+      "Data",
+      "CAD",
+      "3D models"
+    ],
+    "duration": 10
+  },
+  {
+    "title": "Office to PDF. PDF to Word.",
+    "tag": "03 / ADDED IN EASY",
+    "kind": "office",
+    "voice": "Easy adds an ONLYOFFICE integration. With Desktop Editors installed and opened once on your Mac, Word, PowerPoint, and Excel files can become PDFs through its rendering engine. Font checks and conversion logs help identify substitutions that may affect the result.",
+    "labels": [
+      "DOCX",
+      "PPTX",
+      "XLSX",
+      "PDF"
+    ],
+    "duration": 11
+  },
+  {
+    "title": "Your media. The format you need.",
+    "tag": "04 / VIDEO & AUDIO",
+    "kind": "media",
+    "voice": "Add FFmpeg for video and audio. Convert video formats, extract audio, create animated GIFs, or export frames. Presets control quality, resolution, and compatible codecs. Text subtitles can also be converted, with hardware encoding available for supported setups.",
+    "labels": [
+      "Video \u2192 MP4 / WEBM",
+      "Audio \u2192 MP3 / FLAC",
+      "GIFs & frames",
+      "Text subtitles"
+    ],
+    "duration": 6
+  },
+  {
+    "title": "From a few files to a full workflow.",
+    "tag": "05 / AUTOMATION",
+    "kind": "automation",
+    "voice": "Drop several files to process them in parallel. Watch folders automatically convert new arrivals. The filee command line exposes the same engines and presets for scripts. Progress and recent conversions help you follow the work from start to finish.",
+    "labels": [
+      "Batch conversion",
+      "Watch folders",
+      "Command line"
+    ],
+    "duration": 9
+  },
+  {
+    "title": "Your files stay on your Mac.",
+    "tag": "06 / LOCAL PROCESSING",
+    "kind": "privacy",
+    "voice": "Conversion runs locally, without uploading your files. Once the required engines are available, conversion works offline. Results normally appear beside the originals, with configurable destinations. Source files are protected from overwrite. Optional engine downloads still need an internet connection.",
+    "labels": [
+      "Local processing",
+      "Offline conversion*",
+      "Originals protected"
+    ],
+    "duration": 8
+  },
+  {
+    "title": "Less file friction. More flow.",
+    "tag": "EASY / BUILT ON FILEE",
+    "kind": "outro",
+    "voice": "Easy combines quick conversions, reusable presets, and automation, with added document handling for the Mac. From one image to a folder of reports: choose your format, keep control of your files, and get back to your work.",
+    "labels": [
+      "Choose a format.",
+      "Keep control.",
+      "Keep moving."
+    ],
+    "duration": 4
+  }
+]

@@ -1,0 +1,1 @@
+For PDF to Word, Easy rebuilds positioned text into paragraphs, headings, and tables. The result is a document you can edit. Layout can reflow, and equations become text with subscript and superscript, rather than editable equation objects.

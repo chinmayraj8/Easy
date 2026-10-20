@@ -1,0 +1,199 @@
+1
+00:00:00,550 --> 00:00:04,253
+Meet Easy. A desktop file converter that brings the right format to
+
+2
+00:00:04,253 --> 00:00:07,647
+your cursor. Built on the open source Filee project, this customized
+
+3
+00:00:07,647 --> 00:00:10,424
+Mac app turns everyday conversion into a simple gesture.
+
+4
+00:00:11,783 --> 00:00:15,641
+Hold Option, drag a file, and choose a format from the ring.
+
+5
+00:00:15,641 --> 00:00:18,212
+Drop onto your choice, and Easy starts converting.
+
+6
+00:00:18,212 --> 00:00:22,070
+The available choices adapt to your files, so your workflow stays focused.
+
+7
+00:00:23,450 --> 00:00:27,130
+Images, documents, spreadsheets, presentations, and PDFs share one
+
+8
+00:00:27,130 --> 00:00:31,731
+workflow. The engine catalog also covers e books, archives, subtitles,
+
+9
+00:00:31,731 --> 00:00:35,871
+fonts, structured data, CAD drawings, and three dimensional models.
+
+10
+00:00:35,871 --> 00:00:40,011
+Support depends on the format, route, and available engine.
+
+11
+00:00:41,383 --> 00:00:45,319
+Turn images into web friendly formats, resize them, or build a PDF.
+
+12
+00:00:45,319 --> 00:00:49,254
+Merge documents, split pages, select a page range, or compress a PDF.
+
+13
+00:00:49,254 --> 00:00:53,189
+Extract text or page images for the next step in your work.
+
+14
+00:00:54,550 --> 00:00:56,293
+Easy adds an ONLYOFFICE integration.
+
+15
+00:00:56,293 --> 00:01:00,476
+With Desktop Editors installed and opened once on your Mac, Word, PowerPoint,
+
+16
+00:01:00,476 --> 00:01:03,962
+and Excel files can become PDFs through its rendering engine.
+
+17
+00:01:03,962 --> 00:01:07,449
+Font checks and conversion logs help identify substitutions that may
+
+18
+00:01:07,449 --> 00:01:08,494
+affect the result.
+
+19
+00:01:09,850 --> 00:01:13,768
+For PDF to Word, Easy rebuilds positioned text into paragraphs, headings,
+
+20
+00:01:13,768 --> 00:01:17,330
+and tables. The result is a document you can edit.
+
+21
+00:01:17,330 --> 00:01:21,248
+Layout can reflow, and equations become text with subscript and superscript,
+
+22
+00:01:21,248 --> 00:01:23,029
+rather than editable equation objects.
+
+23
+00:01:24,383 --> 00:01:26,983
+Add FFmpeg for video and audio.
+
+24
+00:01:26,983 --> 00:01:31,316
+Convert video formats, extract audio, create animated GIFs, or export
+
+25
+00:01:31,316 --> 00:01:34,782
+frames. Presets control quality, resolution, and compatible codecs.
+
+26
+00:01:34,782 --> 00:01:39,114
+Text subtitles can also be converted, with hardware encoding available
+
+27
+00:01:39,114 --> 00:01:40,414
+for supported setups.
+
+28
+00:01:41,783 --> 00:01:44,200
+Create a toolbar for each file type.
+
+29
+00:01:44,200 --> 00:01:47,998
+Reorder its options, then save presets for quality, size, PDF pages,
+
+30
+00:01:47,998 --> 00:01:51,106
+and compression. Choose the output folder and naming rules.
+
+31
+00:01:51,106 --> 00:01:54,558
+Light and dark themes let the workspace match your preferences.
+
+32
+00:01:55,917 --> 00:01:58,466
+Drop several files to process them in parallel.
+
+33
+00:01:58,466 --> 00:02:00,378
+Watch folders automatically convert new arrivals.
+
+34
+00:02:00,378 --> 00:02:04,202
+The filee command line exposes the same engines and presets for scripts.
+
+35
+00:02:04,202 --> 00:02:07,707
+Progress and recent conversions help you follow the work from start
+
+36
+00:02:07,707 --> 00:02:08,344
+to finish.
+
+37
+00:02:09,717 --> 00:02:13,764
+Under the hood, Easy plans a route between formats, including conversions
+
+38
+00:02:13,764 --> 00:02:17,443
+with intermediate steps. A job queue manages engine concurrency, and
+
+39
+00:02:17,443 --> 00:02:19,283
+engine priority resolves competing choices.
+
+40
+00:02:19,283 --> 00:02:23,330
+Built in, bundled, and optional tools work together behind the same
+
+41
+00:02:23,330 --> 00:02:23,698
+interface.
+
+42
+00:02:25,050 --> 00:02:27,854
+Conversion runs locally, without uploading your files.
+
+43
+00:02:27,854 --> 00:02:31,459
+Once the required engines are available, conversion works offline.
+
+44
+00:02:31,459 --> 00:02:35,063
+Results normally appear beside the originals, with configurable destinations.
+
+45
+00:02:35,063 --> 00:02:37,467
+Source files are protected from overwrite.
+
+46
+00:02:37,467 --> 00:02:40,671
+Optional engine downloads still need an internet connection.
+
+47
+00:02:42,050 --> 00:02:44,610
+Easy combines quick conversions, reusable presets, and automation,
+
+48
+00:02:44,610 --> 00:02:46,851
+with added document handling for the Mac.
+
+49
+00:02:46,851 --> 00:02:51,011
+From one image to a folder of reports: choose your format, keep control
+
+50
+00:02:51,011 --> 00:02:53,892
+of your files, and get back to your work.
