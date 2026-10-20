@@ -15,6 +15,9 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
     /// <summary>Locks itself this long after it was opened (when no file in it is still open).</summary>
     private static readonly TimeSpan AutoLock = TimeSpan.FromMinutes(10);
 
+    // One operation at a time: the auto-lock or the Finder watch must never lock the vault between two files being
+    // hidden, or the next one would be copied into the bare mount folder, unencrypted.
+    private readonly SemaphoreSlim _gate = new(1, 1);
     private Timer? _autoLock;
     private Timer? _finderWatch;
     private bool _seenInFinder;
@@ -32,7 +35,9 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
     public event EventHandler? StateChanged;
 
     /// <summary>Makes the vault with <paramref name="password"/>. Returns an error message, or null.</summary>
-    public async Task<string?> CreateAsync(string password)
+    public Task<string?> CreateAsync(string password) => Gated(() => CreateCoreAsync(password));
+
+    private async Task<string?> CreateCoreAsync(string password)
     {
         Directory.CreateDirectory(store.Directory);
         var (ok, output) = await HdiutilAsync(password, "create", "-size", "500g", "-type", "SPARSEBUNDLE", "-fs", "APFS",
@@ -40,14 +45,16 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
         if (!ok)
             return output;
         await RunAsync("/usr/bin/chflags", null, "hidden", BundlePath);
-        if (await UnlockAsync(password) is { } error)
+        if (await UnlockCoreAsync(password) is { } error)
             return error;
         await File.WriteAllTextAsync(Path.Combine(MountPoint, ".easy-vault"), "");
         return null;
     }
 
     /// <summary>Opens the vault. Returns an error message (a wrong password), or null.</summary>
-    public async Task<string?> UnlockAsync(string password)
+    public Task<string?> UnlockAsync(string password) => Gated(() => UnlockCoreAsync(password));
+
+    private async Task<string?> UnlockCoreAsync(string password)
     {
         if (IsOpen)
             return null;
@@ -62,7 +69,9 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
     }
 
     /// <summary>Closes the vault. False when a file in it is still open (it stays open then).</summary>
-    public async Task<bool> LockAsync()
+    public Task<bool> LockAsync() => Gated(LockCoreAsync);
+
+    private async Task<bool> LockCoreAsync()
     {
         if (!IsOpen)
             return true;
@@ -84,12 +93,20 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
     /// Moves files and folders into the open vault, noting where each came from (in the vault, so encrypted too).
     /// Returns how many were hidden.
     /// </summary>
-    public async Task<int> MoveInAsync(IReadOnlyList<string> paths)
+    public Task<int> MoveInAsync(IReadOnlyList<string> paths) => Gated(() => MoveInCoreAsync(paths));
+
+    private async Task<int> MoveInCoreAsync(IReadOnlyList<string> paths)
     {
         var origins = ReadOrigins();
         var hidden = 0;
         foreach (var path in paths)
         {
+            // Into the mounted, encrypted image only: locked, the mount point is a plain folder.
+            if (!IsOpen)
+            {
+                log.LogWarning("The vault is locked; {Path} and the rest stay where they are", path);
+                break;
+            }
             if (HoldsEasyData(path))
             {
                 log.LogWarning("Not hiding {Path}: Easy's data folder (with the vault itself) is in it", path);
@@ -119,17 +136,26 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
     public bool Holds(IReadOnlyList<string> paths) =>
         IsOpen && paths.Count > 0 && paths.All(p => Path.GetDirectoryName(Path.GetFullPath(p.TrimEnd('/'))) == MountPoint);
 
+    /// <summary>The vault's own files (its marker and the notes of where files came from), never moved out.</summary>
+    private static bool IsVaultFile(string name) => name is ".easy-vault" || name.StartsWith(".easy-origins", StringComparison.Ordinal);
+
     /// <summary>
     /// Moves files out of the open vault into the folders they were hidden from (made again when gone; Downloads for
     /// one without a note). Returns how many came back.
     /// </summary>
-    public async Task<int> MoveOutAsync(IReadOnlyList<string> paths)
+    public Task<int> MoveOutAsync(IReadOnlyList<string> paths) => Gated(() => MoveOutCoreAsync(paths));
+
+    private async Task<int> MoveOutCoreAsync(IReadOnlyList<string> paths)
     {
         var origins = ReadOrigins();
         var restored = 0;
         foreach (var path in paths)
         {
+            if (!IsOpen)
+                break;
             var name = Path.GetFileName(path.TrimEnd('/'));
+            if (IsVaultFile(name))
+                continue;
             var folder = origins.TryGetValue(name, out var origin)
                 ? Path.GetDirectoryName(origin)!
                 : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
@@ -163,9 +189,11 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
         for (var n = 2; File.Exists(target) || Directory.Exists(target); n++)
             target = Path.Combine(folder, $"{Path.GetFileNameWithoutExtension(name)} ({n}){Path.GetExtension(name)}");
 
-        if (!await RunAsync("/usr/bin/ditto", null, path, target) || !SameSize(path, target))
+        // The original goes only once its copy is complete and identical, byte for byte.
+        if (!await RunAsync("/usr/bin/ditto", null, path, target) || !await Task.Run(() => Identical(path, target)))
         {
             log.LogWarning("Moving {Path} failed; the original stays where it is", path);
+            DeleteCopy(target);
             return null;
         }
         try
@@ -191,17 +219,92 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
         return target;
     }
 
+    /// <summary>A copy that didn't come out whole is removed (the original was never touched).</summary>
+    private void DeleteCopy(string copy)
+    {
+        try
+        {
+            if (Directory.Exists(copy))
+                Directory.Delete(copy, recursive: true);
+            else if (File.Exists(copy) || new FileInfo(copy).LinkTarget is not null)
+                File.Delete(copy);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            log.LogWarning(ex, "The incomplete copy {Copy} couldn't be removed", copy);
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="copy"/> holds exactly what <paramref name="source"/> does: the same files and folders,
+    /// each file with the same bytes (SHA-256), each link pointing to the same place.
+    /// </summary>
+    internal static bool Identical(string source, string copy)
+    {
+        try
+        {
+            if (!Directory.Exists(source) || new DirectoryInfo(source).LinkTarget is not null)
+                return SameEntry(source, copy);
+            if (!Directory.Exists(copy))
+                return false;
+            var a = Entries(source);
+            var b = Entries(copy);
+            return a.SetEquals(b) && a.All(entry => SameEntry(Path.Combine(source, entry), Path.Combine(copy, entry)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+
+        static HashSet<string> Entries(string folder) =>
+            new DirectoryInfo(folder).EnumerateFileSystemInfos("*", new EnumerationOptions
+            {
+                RecurseSubdirectories = true,
+                AttributesToSkip = 0,
+                IgnoreInaccessible = false,
+            }).Where(e => e.Name != ".DS_Store") // Finder's view settings, written whenever a folder is browsed
+                .Select(e => Path.GetRelativePath(folder, e.FullName)).ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static bool SameEntry(string source, string copy)
+    {
+        var a = new FileInfo(source);
+        var b = new FileInfo(copy);
+        if (a.LinkTarget is not null || b.LinkTarget is not null)
+            return a.LinkTarget == b.LinkTarget;
+        if (Directory.Exists(source))
+            return Directory.Exists(copy);
+        if (!b.Exists || a.Length != b.Length)
+            return false;
+        using var x = File.OpenRead(source);
+        using var y = File.OpenRead(copy);
+        return System.Security.Cryptography.SHA256.HashData(x).AsSpan().SequenceEqual(System.Security.Cryptography.SHA256.HashData(y));
+    }
+
     private string OriginsPath => Path.Combine(MountPoint, ".easy-origins");
 
-    /// <summary>Name in the vault → full path it was hidden from, one "name TAB path" per line.</summary>
-    private Dictionary<string, string> ReadOrigins() =>
-        File.Exists(OriginsPath)
-            ? File.ReadAllLines(OriginsPath).Select(l => l.Split('\t', 2)).Where(p => p.Length == 2)
-                .GroupBy(p => p[0]).ToDictionary(g => g.Key, g => g.Last()[1])
-            : [];
+    /// <summary>
+    /// Name in the vault → full path it was hidden from, as JSON (any character in a name is fine). Vaults from before
+    /// it hold one "name TAB path" per line, read the same way.
+    /// </summary>
+    private Dictionary<string, string> ReadOrigins()
+    {
+        if (!File.Exists(OriginsPath))
+            return [];
+        var text = File.ReadAllText(OriginsPath);
+        if (text.StartsWith('{'))
+            return System.Text.Json.JsonSerializer.Deserialize(text, AppJsonContext.Default.DictionaryStringString) ?? [];
+        return text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split('\t', 2)).Where(p => p.Length == 2)
+            .GroupBy(p => p[0]).ToDictionary(g => g.Key, g => g.Last()[1]);
+    }
 
-    private void WriteOrigins(Dictionary<string, string> origins) =>
-        File.WriteAllLines(OriginsPath, origins.Select(o => $"{o.Key}\t{o.Value}"));
+    /// <summary>Written next to it first, then moved over it: a crash mid-write leaves the old notes whole.</summary>
+    private void WriteOrigins(Dictionary<string, string> origins)
+    {
+        var temp = OriginsPath + ".tmp";
+        File.WriteAllText(temp, System.Text.Json.JsonSerializer.Serialize(origins, AppJsonContext.Default.DictionaryStringString));
+        File.Move(temp, OriginsPath, overwrite: true);
+    }
 
     /// <summary>Shows the open vault in Finder; it locks when its last Finder window closes.</summary>
     public void Reveal()
@@ -252,9 +355,11 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
     /// Changes the password (the vault is locked first). Returns an error message (the current password is wrong, or
     /// <see cref="InUse"/>: a hidden file is still open), or null.
     /// </summary>
-    public async Task<string?> ChangePasswordAsync(string current, string next)
+    public Task<string?> ChangePasswordAsync(string current, string next) => Gated(() => ChangePasswordCoreAsync(current, next));
+
+    private async Task<string?> ChangePasswordCoreAsync(string current, string next)
     {
-        if (!await LockAsync())
+        if (!await LockCoreAsync())
             return InUse;
         var (ok, output) = await HdiutilAsync($"{current}\0{next}\0", "chpass", "-oldstdinpass", "-newstdinpass", BundlePath);
         return ok ? null : output;
@@ -274,18 +379,33 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
     {
         _autoLock?.Dispose();
         _finderWatch?.Dispose();
-        // Quitting locks it: a file still open in another app keeps it open until that app closes it.
-        if (IsOpen)
-            HdiutilAsync(null, "detach", MountPoint).GetAwaiter().GetResult();
+        // Quitting locks it, after a move under way: a file still open in another app keeps it open until that app
+        // closes it.
+        var gated = _gate.Wait(TimeSpan.FromMinutes(2));
+        try
+        {
+            if (IsOpen)
+                HdiutilAsync(null, "detach", MountPoint).GetAwaiter().GetResult();
+        }
+        finally
+        {
+            if (gated)
+                _gate.Release();
+        }
     }
 
-    private static bool SameSize(string source, string copy) =>
-        Directory.Exists(source)
-            ? Size(source) == Size(copy)
-            : File.Exists(copy) && new FileInfo(source).Length == new FileInfo(copy).Length;
-
-    private static long Size(string folder) =>
-        Directory.Exists(folder) ? new DirectoryInfo(folder).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length) : -1;
+    private async Task<T> Gated<T>(Func<Task<T>> operation)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            return await operation();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
 
     private static async Task<(bool Ok, string Output)> HdiutilAsync(string? password, params string[] arguments)
     {

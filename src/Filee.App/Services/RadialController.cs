@@ -325,13 +325,14 @@ public sealed class RadialController(
         if (preset.Kind == PresetKind.Hide && vault.Holds(files))
         {
             log.LogInformation("Unhiding {Count} file(s)", files.Count);
-            ShowDone(await vault.MoveOutAsync(files) > 0 ? "donut.unhidden" : "donut.not_unhidden");
+            var restored = await vault.MoveOutAsync(files);
+            ShowDone(restored == files.Count ? "donut.unhidden" : restored == 0 ? "donut.not_unhidden" : "donut.partly_unhidden");
             return;
         }
         if (preset.Kind == PresetKind.Hide)
         {
             if (await HideAsync(files) is { } hidden)
-                ShowDone(hidden > 0 ? "donut.hidden" : "donut.not_hidden");
+                ShowDone(hidden == files.Count ? "donut.hidden" : hidden == 0 ? "donut.not_hidden" : "donut.partly_hidden");
             return;
         }
 

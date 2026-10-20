@@ -652,6 +652,8 @@
   "donut.not_hidden": "Couldn't hide",
   "donut.unhidden": "Back in its folder",
   "donut.not_unhidden": "Couldn't unhide",
+  "donut.partly_hidden": "Some couldn't be hidden",
+  "donut.partly_unhidden": "Some stayed hidden",
   "error.needs_macos": "Needs macOS",
   "error.wrong_password": "That password doesn't open this PDF",
   "error.needs_password": "Needs a password: run it from the donut, which asks for one",
