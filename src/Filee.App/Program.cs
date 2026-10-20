@@ -266,6 +266,8 @@ internal static class Program
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<App>()
             .UsePlatformDetect()
+            // Menu bar app like Maccy: the tray icon is the way in, so no Dock icon or app menu.
+            .With(new MacOSPlatformOptions { ShowInDock = false })
             .ConfigureFonts(fonts => fonts.AddFontCollection(new FileeFontCollection()))
 #if DEBUG
             .WithDeveloperTools()
