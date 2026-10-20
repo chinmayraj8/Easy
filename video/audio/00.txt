@@ -1,1 +1,0 @@
-Meet Easy. A desktop file converter that brings the right format to your cursor. Built on the open source Filee project, this customized Mac app turns everyday conversion into a simple gesture.

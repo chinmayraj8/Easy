@@ -23,8 +23,14 @@ public sealed class PresetAvailability(ConverterCatalog catalog, ILocalizer loc,
             return catalog.All.OfType<IFileCombiner>().Any(c => c.CanCombineInto(archive.Id)) ? null : loc["error.no_route"];
         }
 
+        if (preset.Kind == PresetKind.Hide)
+            return OperatingSystem.IsMacOS() ? null : loc["error.needs_macos"];
         if (formats.Count == 0)
             return loc["error.unsupported_source"];
+        if (preset.Kind == PresetKind.CopyText)
+            return !OperatingSystem.IsMacOS() ? loc["error.needs_macos"]
+                : formats.Any(f => f.Category == FormatCategory.Image || f.Id == "pdf") ? null
+                : loc["error.no_route"];
 
         var merge = preset.Pdf.MergeIntoSingle && preset.TargetFormat is "pdf" or "docx" or "pptx";
         var turns = preset.Image.TurnsOrMirrors;

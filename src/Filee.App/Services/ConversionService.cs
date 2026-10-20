@@ -61,7 +61,7 @@ public sealed class ConversionService
     /// <returns>The job's view model, or null when there was nothing to convert.</returns>
     public JobViewModel? Start(IReadOnlyList<string> files, Preset preset, bool showInToast = true)
     {
-        if (files.Count == 0 || preset.IsGroup)
+        if (files.Count == 0 || preset.Kind != PresetKind.Convert)
             return null;
         // A preset on "Default" saves where Settings > General says (read now, so a changed default applies at once).
         preset = _store.Settings.WithDefaultOutput(preset);

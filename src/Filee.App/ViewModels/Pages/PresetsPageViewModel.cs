@@ -44,7 +44,7 @@ public sealed partial class PresetsPageViewModel : ObservableObject, IFitsWindow
         _windows = windows;
         VisiblePresets = new FilteredList<PresetListItem>(Presets, p => [p.Name, p.Target, p.Preset.TargetFormat]);
         // Groups convert nothing: they live on the donut only (Settings → Toolbar).
-        foreach (var preset in store.Presets.Where(p => !p.IsGroup))
+        foreach (var preset in store.Presets.Where(p => p.Kind == PresetKind.Convert))
             Presets.Add(new PresetListItem(preset, loc));
         SelectedPreset = Presets.FirstOrDefault();
     }

@@ -1,1 +1,0 @@
-Create a toolbar for each file type. Reorder its options, then save presets for quality, size, PDF pages, and compression. Choose the output folder and naming rules. Light and dark themes let the workspace match your preferences.

@@ -36,6 +36,7 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
 
     public Task<IReadOnlyList<string>> ConvertAsync(ConversionStep step, IProgress<double>? progress, CancellationToken cancellationToken) =>
         step.From != "pdf" ? Task.Run(() => ImageToPdf(step, progress, cancellationToken), cancellationToken)
+        : step.Preset.Pdf.Unlock || step.Preset.Pdf.Protect ? Task.Run(() => UnlockOrProtect(step), cancellationToken)
         : step.Preset.Pdf.Compression == PdfCompression.None ? Task.Run(() => SplitOrExtract(step, progress, cancellationToken), cancellationToken)
         : Task.Run(() => CompressAsync(step, progress, cancellationToken), cancellationToken);
 
@@ -103,6 +104,61 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
             return [];
         document.Save(path);
         return [path];
+    }
+
+    /// <summary>
+    /// PDF → PDF without a password (<see cref="PdfOptions.Unlock"/>: opened with <see cref="PdfOptions.Password"/>), or
+    /// encrypted with AES-256 and that password (<see cref="PdfOptions.Protect"/>). Bookmarks, links and forms stay.
+    /// </summary>
+    private static IReadOnlyList<string> UnlockOrProtect(ConversionStep step)
+    {
+        var options = step.Preset.Pdf;
+        var password = options.Unlock ? options.Password : null;
+        PdfDocument document;
+        try
+        {
+            document = PdfReader.Open(step.InputPath, password, PdfDocumentOpenMode.Modify);
+        }
+        catch (PdfReaderException ex) when (ex.Message.Contains("owner", StringComparison.OrdinalIgnoreCase))
+        {
+            // The password opens the file but doesn't own it (bank statements set a random owner password): its pages
+            // go into a new PDF, without its bookmarks.
+            document = new PdfDocument();
+            try
+            {
+                using var source = PdfReader.Open(step.InputPath, password, PdfDocumentOpenMode.Import);
+                foreach (var page in source.Pages)
+                    document.AddPage(page);
+            }
+            catch (PdfReaderException inner) when (inner.Message.Contains("password", StringComparison.OrdinalIgnoreCase))
+            {
+                document.Dispose();
+                throw options.Unlock ? new ConversionRefusedException("error.wrong_password") : PdfDocumentReader.PasswordProtected();
+            }
+        }
+        catch (PdfReaderException ex) when (ex.Message.Contains("password", StringComparison.OrdinalIgnoreCase))
+        {
+            throw options.Unlock ? new ConversionRefusedException("error.wrong_password") : PdfDocumentReader.PasswordProtected();
+        }
+
+        using (document)
+        {
+            if (options.Protect)
+            {
+                document.SecuritySettings.UserPassword = options.Password;
+                document.SecuritySettings.OwnerPassword = options.Password;
+                document.SecurityHandler.SetEncryption(PdfSharp.Pdf.Security.PdfDefaultEncryption.V5);
+            }
+            else
+            {
+                document.SecurityHandler.SetEncryptionToNoneAndResetPasswords();
+            }
+            var output = step.Output.Allocate("pdf");
+            if (output is null)
+                return [];
+            document.Save(output);
+            return [output];
+        }
     }
 
     /// <summary>PDF → PDF: split into single pages, or extract the configured page range.</summary>

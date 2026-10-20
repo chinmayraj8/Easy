@@ -16,6 +16,12 @@ public enum PresetKind
     /// conversion is picked (preset list, watch folders, <c>filee --preset</c>).
     /// </summary>
     Group,
+
+    /// <summary>Recognizes the text in images and PDFs (macOS Vision) and puts it on the clipboard. Writes no file.</summary>
+    CopyText,
+
+    /// <summary>Moves the files into the password-protected vault (an encrypted disk image, macOS).</summary>
+    Hide,
 }
 
 /// <summary>
@@ -116,6 +122,31 @@ public sealed class Preset
     /// </summary>
     public List<string> SubPresetIds { get; set; } = [];
 
+    /// <summary>
+    /// Saves at most this many kilobytes: lower quality, then smaller pictures, until the file fits. 0 = no limit;
+    /// <see cref="AskSize"/> = asked each time the donut runs it.
+    /// </summary>
+    public int MaxSizeKb { get; set; }
+
+    /// <summary><see cref="MaxSizeKb"/> of a preset that asks for the size when it runs.</summary>
+    public const int AskSize = -1;
+
+    /// <summary>"200", "200 KB", "1.5 MB" → kilobytes; null when it isn't a size above zero.</summary>
+    public static int? ParseSizeKb(string text)
+    {
+        var trimmed = text.Trim().ToLowerInvariant().Replace(" ", "");
+        var factor = trimmed.EndsWith("mb") || trimmed.EndsWith('m') ? 1024 : 1;
+        var number = trimmed.TrimEnd('b', 'k', 'm');
+        return double.TryParse(number, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
+               && value * factor >= 1
+            ? (int)(value * factor)
+            : null;
+    }
+
+    /// <summary>True for <see cref="PresetKind.CopyText"/> and <see cref="PresetKind.Hide"/>: they run no conversion.</summary>
+    [JsonIgnore]
+    public bool IsAction => Kind is PresetKind.CopyText or PresetKind.Hide;
+
     /// <summary>True for a <see cref="PresetKind.Group"/>.</summary>
     [JsonIgnore]
     public bool IsGroup => Kind == PresetKind.Group;
@@ -149,6 +180,7 @@ public sealed class Preset
         Output = Output.Clone(),
         Kind = Kind,
         SubPresetIds = [.. SubPresetIds],
+        MaxSizeKb = MaxSizeKb,
     };
 }
 
@@ -342,6 +374,16 @@ public sealed class PdfOptions
 
     /// <summary>For PDF → PDF: write every page as its own file.</summary>
     public bool SplitPages { get; set; }
+
+    /// <summary>For PDF → PDF: open the file with <see cref="Password"/> and save it without one.</summary>
+    public bool Unlock { get; set; }
+
+    /// <summary>For PDF → PDF: save it encrypted (AES-256) with <see cref="Password"/>.</summary>
+    public bool Protect { get; set; }
+
+    /// <summary>Asked when <see cref="Unlock"/> or <see cref="Protect"/> runs; never saved (history keeps presets).</summary>
+    [JsonIgnore]
+    public string Password { get; set; } = "";
 
     /// <summary>
     /// With <see cref="SplitPages"/>: the parts to write instead of single pages, e.g. <c>"1-3, 4-8, 9-"</c> (one file per

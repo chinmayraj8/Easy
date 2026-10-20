@@ -123,6 +123,7 @@ public partial class App : Application
         store.SettingsChanged += (_, _) => ApplySettings(store.Settings);
 
         AppHost.Get<TrayService>().Create(this);
+        AppHost.Get<VaultService>().LockLeftOpen();
         AppHost.Get<WindowService>().EnsureToast();
         AppHost.Get<WatchFolderService>().Start();
         // Once LibreOffice is installed: prepare its profiles while the user isn't converting yet.
@@ -139,6 +140,7 @@ public partial class App : Application
             AppHost.Get<MemoryTrimmer>().Dispose();
             AppHost.Get<TriggerService>().Dispose();
             AppHost.Get<TrayService>().Dispose();
+            AppHost.Get<VaultService>().Dispose();
             AppHost.Get<WatchFolderService>().DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5));
         };
 

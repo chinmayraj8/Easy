@@ -80,7 +80,7 @@ public class BuiltInDataTests
     }
 
     [Fact]
-    public void Built_in_groups_fan_out_existing_conversions_on_no_default_donut()
+    public void Built_in_groups_fan_out_existing_presets_that_are_no_groups()
     {
         var presets = BuiltInData.CreatePresets().ToDictionary(p => p.Id);
         var groups = presets.Values.Where(p => p.IsGroup).ToList();
@@ -90,7 +90,6 @@ public class BuiltInDataTests
             Assert.InRange(group.SubPresetIds.Count, 1, Preset.MaxSubPresets);
             Assert.All(group.SubPresetIds, id => Assert.False(presets[id].IsGroup, id));
         }
-        Assert.DoesNotContain(BuiltInData.CreateProfiles(), p => p.PresetIds.Any(id => presets[id].IsGroup));
     }
 
     [Fact]
@@ -109,7 +108,7 @@ public class BuiltInDataTests
     {
         foreach (var preset in BuiltInData.CreatePresets())
         {
-            if (preset.IsGroup)
+            if (preset.Kind != PresetKind.Convert)
                 Assert.Equal(Preset.GroupTarget, preset.TargetFormat); // none an older Filee could run it with
             else
                 Assert.True(preset.TargetFormat == BuiltInData.SameAsSource || FormatRegistry.FindById(preset.TargetFormat) is not null, preset.Id);

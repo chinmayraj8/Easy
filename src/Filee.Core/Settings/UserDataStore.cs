@@ -139,7 +139,7 @@ public sealed class UserDataStore
     public Preset? FindPreset(string id) => Presets.FirstOrDefault(p => p.Id == id);
 
     /// <summary>The preset <paramref name="id"/> when it converts (a group doesn't), for every place that runs one.</summary>
-    public Preset? FindConversion(string id) => Presets.FirstOrDefault(p => p.Id == id && !p.IsGroup);
+    public Preset? FindConversion(string id) => Presets.FirstOrDefault(p => p.Id == id && p.Kind == PresetKind.Convert);
 
     /// <summary>Exports presets and profiles to a shareable JSON file.</summary>
     public void Export(string path) =>
@@ -181,7 +181,7 @@ public sealed class UserDataStore
         }
         // A Filee from before groups drops "kind" (and the presets) when it saves a group, which comes back as a
         // conversion to "group": still a group, now an empty one, rather than a conversion that can never run.
-        foreach (var preset in Presets.Where(p => !p.IsGroup && p.TargetFormat == Preset.GroupTarget))
+        foreach (var preset in Presets.Where(p => p.Kind == PresetKind.Convert && p.TargetFormat == Preset.GroupTarget))
             preset.Kind = PresetKind.Group;
         // A group fans out conversions only (no group in a group), each once, at most MaxSubPresets, and has no
         // target format an older Filee could run it with.
@@ -593,8 +593,36 @@ internal static class SettingsMigrations
                 presets.Add(preset);
                 changed = true;
             }
-            changed |= Offer(presets, profiles, "images", "compress-image", null);
-            changed |= Offer(presets, profiles, "pdf", "compress-pdf", null);
+            // Not next to the group that holds it (schema 28).
+            if (profiles.FirstOrDefault(p => p.Id == "images")?.PresetIds.Contains("compress-images") != true)
+                changed |= Offer(presets, profiles, "images", "compress-image", null);
+            if (profiles.FirstOrDefault(p => p.Id == "pdf")?.PresetIds.Contains("compress-pdfs") != true)
+                changed |= Offer(presets, profiles, "pdf", "compress-pdf", null);
+        }
+        // v28: compress to a size, PDF passwords, copy text and hide. An unchanged PDF donut takes the new default (groups
+        //      keep it under twelve slices); elsewhere "Compress" becomes the group holding it, and the new slices are
+        //      offered at the end where there is room.
+        if (from < 28)
+        {
+            foreach (var preset in BuiltInData.ToolPresets().Where(p => presets.All(existing => existing.Id != p.Id)))
+            {
+                presets.Add(preset);
+                changed = true;
+            }
+            var imageDonut = profiles.FirstOrDefault(p => p.Id == "images");
+            var pdfDonut = profiles.FirstOrDefault(p => p.Id == "pdf");
+            if (pdfDonut is not null && pdfDonut.PresetIds.SequenceEqual(BuiltInData.PdfDonutBefore28))
+            {
+                pdfDonut.PresetIds = [.. BuiltInData.PdfDonut];
+                changed = true;
+            }
+            changed |= Swap(imageDonut, "compress-image", "compress-images") | Swap(pdfDonut, "compress-pdf", "compress-pdfs");
+            foreach (var (profile, preset) in new[]
+                     {
+                         ("images", "copy-text"), ("images", "hide"), ("pdf", "pdf-password"), ("pdf", "copy-text"), ("pdf", "hide"),
+                         ("office", "hide"), ("spreadsheets", "hide"), ("presentations", "hide"), ("video", "hide"),
+                     })
+                changed |= Offer(presets, profiles, profile, preset, null);
         }
         return changed;
     }
@@ -777,6 +805,19 @@ internal static class SettingsMigrations
             return false;
         var index = after is null ? -1 : profile.PresetIds.IndexOf(after);
         profile.PresetIds.Insert(index < 0 ? profile.PresetIds.Count : index + 1, presetId);
+        return true;
+    }
+
+    /// <summary>Puts <paramref name="group"/> where <paramref name="single"/> is (or only removes it, the group being there).</summary>
+    private static bool Swap(ToolbarProfile? profile, string single, string group)
+    {
+        var index = profile?.PresetIds.IndexOf(single) ?? -1;
+        if (index < 0)
+            return false;
+        if (profile!.PresetIds.Contains(group))
+            profile.PresetIds.RemoveAt(index);
+        else
+            profile.PresetIds[index] = group;
         return true;
     }
 

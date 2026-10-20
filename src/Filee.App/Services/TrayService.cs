@@ -1,4 +1,4 @@
-// System tray icon: open settings, pause gestures, install a new version, quit.
+// System tray icon: open settings, pause gestures, open or lock the hidden files, install a new version, quit.
 
 using Avalonia;
 using Avalonia.Controls;
@@ -9,10 +9,10 @@ using Filee.Core.Settings;
 
 namespace Filee.App.Services;
 
-public sealed class TrayService(UserDataStore store, ILocalizer loc, WindowService windows, UpdateService updates)
+public sealed class TrayService(UserDataStore store, ILocalizer loc, WindowService windows, UpdateService updates, VaultService vault)
 {
     private TrayIcon? _tray;
-    private NativeMenuItem? _open, _pause, _quit, _update;
+    private NativeMenuItem? _open, _pause, _quit, _update, _vault, _vaultPassword;
 
     public void Create(Application app)
     {
@@ -29,6 +29,11 @@ public sealed class TrayService(UserDataStore store, ILocalizer loc, WindowServi
         _quit.Click += (_, _) => (app.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
         _update = new NativeMenuItem();
         _update.Click += async (_, _) => await updates.UpdateAsync();
+        _vault = new NativeMenuItem();
+        _vault.Click += async (_, _) => await ToggleVaultAsync();
+        _vaultPassword = new NativeMenuItem();
+        _vaultPassword.Click += async (_, _) => await ChangeVaultPasswordAsync();
+        vault.StateChanged += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(Refresh);
 
         _tray = new TrayIcon
         {
@@ -71,10 +76,61 @@ public sealed class TrayService(UserDataStore store, ILocalizer loc, WindowServi
         _open!.Header = loc["tray.open"];
         _pause!.Header = store.Settings.Paused ? loc["tray.resume"] : loc["tray.pause"];
         _quit!.Header = loc["tray.quit"];
+        // Hidden files: only once there are some (the first "Hide" makes the vault).
+        if (vault.Exists && !menu.Items.Contains(_vault))
+        {
+            menu.Items.Insert(menu.Items.IndexOf(_pause) + 1, _vault!);
+            menu.Items.Insert(menu.Items.IndexOf(_vault!) + 1, _vaultPassword!);
+        }
+        _vault!.Header = vault.IsOpen ? loc["tray.vault_lock"] : loc["tray.vault_open"];
+        _vaultPassword!.Header = loc["tray.vault_password"];
         var drag = store.Settings.Triggers.FirstOrDefault(t => t.Enabled && t.Kind == TriggerKind.Drag);
         _tray.ToolTipText = store.Settings.Paused
             ? loc["triggers.paused"]
             : loc.Format("tray.tooltip", drag is null ? "—" : GestureText.Modifiers(drag.Modifiers));
+    }
+
+    /// <summary>Asks for the password and shows the hidden files in Finder, or locks them again.</summary>
+    private async Task ToggleVaultAsync()
+    {
+        if (vault.IsOpen)
+        {
+            if (!await vault.LockAsync())
+                await windows.MessageAsync(null, loc["vault.still_in_use"]);
+            return;
+        }
+        while (await windows.AskTextAsync(null, "vault.unlock_question", "password.hint", secret: true) is { } password)
+        {
+            if (await vault.UnlockAsync(password) is null)
+            {
+                vault.Reveal();
+                return;
+            }
+        }
+    }
+
+    /// <summary>Current password, then the new one twice. A forgotten password can't be changed: nothing opens the vault.</summary>
+    private async Task ChangeVaultPasswordAsync()
+    {
+        while (await windows.AskTextAsync(null, "vault.current_question", "password.hint", secret: true) is { } current)
+        {
+            string? next;
+            do
+            {
+                next = await windows.AskTextAsync(null, "vault.new_question", "password.hint", secret: true);
+                if (next is null)
+                    return;
+            }
+            while (next.Length < 8 || await windows.AskTextAsync(null, "vault.confirm_question", "password.hint", secret: true) is not { } again
+                   || again != next);
+
+            var error = await vault.ChangePasswordAsync(current, next);
+            await windows.MessageAsync(null, loc[error is null ? "vault.password_changed"
+                : error == VaultService.InUse ? "vault.still_in_use"
+                : "vault.wrong_password"]);
+            if (error is null or VaultService.InUse)
+                return;
+        }
     }
 
     public void Dispose() => _tray?.Dispose();

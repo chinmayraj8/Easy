@@ -395,7 +395,7 @@ public class DonutGroupTests
             vm.ResetForDrag(); // dragging: the files (and so the donut) aren't known yet
             Assert.True(vm.ReserveSubRing);
 
-            vm.Load([@"C:\docs\a.pdf"], clickMode: true); // the PDF donut has no group
+            vm.Load([@"C:\clips\a.mp4"], clickMode: true); // the video donut has no group
             vm.FitToThisDonut();
             Assert.False(vm.ReserveSubRing);
             vm.Load([@"C:\photos\a.jpg"], clickMode: true); // the image donut has

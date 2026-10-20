@@ -392,4 +392,63 @@ public class ImageAndPdfTests(EngineFixture fx) : IClassFixture<EngineFixture>
         using var last = PdfReader.Open(job.Outputs.Single(o => o.EndsWith("_p4-5.pdf")), PdfDocumentOpenMode.Import);
         Assert.Equal(2, last.PageCount);
     }
+
+    [Fact]
+    public async Task Protect_then_unlock_round_trips_and_a_wrong_password_is_refused()
+    {
+        var dir = fx.NewFolder();
+        var pdf = (await fx.ConvertAsync([EngineFixture.MakeMultiPageTiff(dir, 2)], new Preset { TargetFormat = "pdf" })).Outputs.Single();
+
+        var protect = await fx.ConvertAsync([pdf], new Preset { TargetFormat = "pdf", Pdf = { Protect = true, Password = "s3cret" } });
+        AssertDone(protect);
+        var locked = protect.Outputs.Single();
+        Assert.ThrowsAny<Exception>(() => PdfReader.Open(locked, PdfDocumentOpenMode.Import));
+
+        var wrong = await fx.ConvertAsync([locked], new Preset { TargetFormat = "pdf", Pdf = { Unlock = true, Password = "nope" } });
+        Assert.Equal("error.wrong_password", wrong.Files.Single().ErrorKey);
+
+        var unlock = await fx.ConvertAsync([locked], new Preset { TargetFormat = "pdf", Pdf = { Unlock = true, Password = "s3cret" } });
+        AssertDone(unlock);
+        using var open = PdfReader.Open(unlock.Outputs.Single(), PdfDocumentOpenMode.Import);
+        Assert.Equal(2, open.PageCount);
+    }
+
+    [Fact]
+    public async Task Compress_to_size_lowers_quality_until_the_photo_fits()
+    {
+        var dir = fx.NewFolder();
+        var photo = Path.Combine(dir, "photo.jpg");
+        using (var image = new MagickImage("plasma:", 1600, 1200))
+        {
+            image.Quality = 95;
+            image.Write(photo);
+        }
+        var limitKb = (int)(new FileInfo(photo).Length / 1024 / 4);
+
+        var job = await fx.ConvertAsync([photo], new Preset { TargetFormat = BuiltInData.SameAsSource, MaxSizeKb = limitKb });
+
+        AssertDone(job);
+        Assert.True(new FileInfo(job.Outputs.Single()).Length <= limitKb * 1024L, $"{new FileInfo(job.Outputs.Single()).Length} > {limitKb} KB");
+        Assert.Null(job.Files.Single().NoticeKey);
+    }
+
+    [Fact]
+    public async Task Unlock_with_the_open_password_of_a_pdf_whose_owner_password_differs()
+    {
+        var dir = fx.NewFolder();
+        var pdf = (await fx.ConvertAsync([EngineFixture.MakeMultiPageTiff(dir, 2)], new Preset { TargetFormat = "pdf" })).Outputs.Single();
+        var statement = Path.Combine(dir, "statement.pdf");
+        using (var document = PdfReader.Open(pdf, PdfDocumentOpenMode.Modify))
+        {
+            document.SecuritySettings.UserPassword = "1234";
+            document.SecuritySettings.OwnerPassword = "bank-only";
+            document.Save(statement);
+        }
+
+        var job = await fx.ConvertAsync([statement], new Preset { TargetFormat = "pdf", Pdf = { Unlock = true, Password = "1234" } });
+
+        AssertDone(job);
+        using var open = PdfReader.Open(job.Outputs.Single(), PdfDocumentOpenMode.Import);
+        Assert.Equal(2, open.PageCount);
+    }
 }

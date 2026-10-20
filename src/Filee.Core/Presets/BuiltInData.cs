@@ -63,6 +63,7 @@ public static class BuiltInData
             Pdf = { MergeIntoSingle = true }, Output = { FileNamePattern = "{name}_merged" },
         },
         .. OfficeMergePresets(),
+        .. ToolPresets(),
         new()
         {
             Id = "pdf-long-image", NameKey = "preset.long_image", TargetFormat = "png",
@@ -326,7 +327,7 @@ public static class BuiltInData
         {
             Id = "images", NameKey = "profile.images",
             Extensions = ExtensionsOf(FormatCategory.Image),
-            PresetIds = ["to-png", "to-jpg", "to-webp", "to-pdf", "trace-svg", "trace-line-art", "half-size", "compress-image"],
+            PresetIds = ["to-png", "to-jpg", "to-webp", "to-pdf", "trace-svg", "trace-line-art", "half-size", "compress-images", "copy-text", "hide"],
         },
         new()
         {
@@ -338,7 +339,7 @@ public static class BuiltInData
         {
             Id = "office", NameKey = "profile.office",
             Extensions = ExtensionsOf(FormatCategory.Document),
-            PresetIds = ["to-pdf", "to-docx", "to-txt", "to-html", "to-epub", "to-png", "merge-pdf", "merge-docx"],
+            PresetIds = ["to-pdf", "to-docx", "to-txt", "to-html", "to-epub", "to-png", "merge-pdf", "merge-docx", "hide"],
         },
         SpreadsheetProfile(),
         PresentationProfile(),
@@ -364,6 +365,10 @@ public static class BuiltInData
     /// stays a preset to add in Settings → Toolbar.
     /// </summary>
     public static readonly IReadOnlyList<string> PdfDonut =
+        ["to-png", "to-jpg", "pdf-long-image", "to-docx", "pdf-slides", "pdf-text", "pdf-split", "merge-pdf", "compress-pdfs", "pdf-password", "copy-text", "hide"];
+
+    /// <summary>The PDF donut of settings schema 27, which schema 28 replaces when the user never changed it.</summary>
+    public static readonly IReadOnlyList<string> PdfDonutBefore28 =
         ["to-png", "to-jpg", "pdf-long-image", "to-docx", "pdf-slides", "to-txt", "to-md", "to-epub", "pdf-split", "merge-pdf", "compress-pdf"];
 
     /// <summary>The PDF donut of settings schema 9 to 17, which schema 18 replaces when the user never changed it.</summary>
@@ -376,8 +381,53 @@ public static class BuiltInData
         Id = "spreadsheets",
         NameKey = "profile.spreadsheets",
         Extensions = ExtensionsOf(FormatCategory.Spreadsheet),
-        PresetIds = ["to-pdf", "to-xlsx", "to-csv", "to-json", "to-ods", "to-html", "merge-pdf"],
+        PresetIds = ["to-pdf", "to-xlsx", "to-csv", "to-json", "to-ods", "to-html", "merge-pdf", "hide"],
     };
+
+    /// <summary>
+    /// Compress to a size, PDF passwords, copy text and hide, and the groups that keep them on full donuts (added in
+    /// settings schema 28, see SettingsMigrations).
+    /// </summary>
+    public static IEnumerable<Preset> ToolPresets() =>
+    [
+        new()
+        {
+            Id = "compress-to-size", NameKey = "preset.compress_to_size", TargetFormat = SameAsSource, MaxSizeKb = Preset.AskSize,
+            Image = { KeepMetadata = false }, Output = { FileNamePattern = "{name}_compressed" },
+        },
+        new()
+        {
+            Id = "unlock-pdf", NameKey = "preset.unlock_pdf", TargetFormat = "pdf",
+            Pdf = { Unlock = true }, Output = { FileNamePattern = "{name}_unlocked" },
+        },
+        new()
+        {
+            Id = "protect-pdf", NameKey = "preset.protect_pdf", TargetFormat = "pdf",
+            Pdf = { Protect = true }, Output = { FileNamePattern = "{name}_protected" },
+        },
+        new() { Id = "copy-text", NameKey = "preset.copy_text", TargetFormat = Preset.GroupTarget, Kind = PresetKind.CopyText },
+        new() { Id = "hide", NameKey = "preset.hide", TargetFormat = Preset.GroupTarget, Kind = PresetKind.Hide },
+        new()
+        {
+            Id = "compress-images", NameKey = "preset.group_compress", TargetFormat = Preset.GroupTarget, Kind = PresetKind.Group,
+            SubPresetIds = ["compress-image", "compress-to-size"],
+        },
+        new()
+        {
+            Id = "compress-pdfs", NameKey = "preset.group_compress", TargetFormat = Preset.GroupTarget, Kind = PresetKind.Group,
+            SubPresetIds = ["compress-pdf", "compress-to-size"],
+        },
+        new()
+        {
+            Id = "pdf-password", NameKey = "preset.group_password", TargetFormat = Preset.GroupTarget, Kind = PresetKind.Group,
+            SubPresetIds = ["unlock-pdf", "protect-pdf"],
+        },
+        new()
+        {
+            Id = "pdf-text", NameKey = "preset.group_text", TargetFormat = Preset.GroupTarget, Kind = PresetKind.Group,
+            SubPresetIds = ["to-txt", "to-md", "to-epub"],
+        },
+    ];
 
     /// <summary>Merge Word or PowerPoint files into one (added in settings schema 24, see SettingsMigrations).</summary>
     public static IEnumerable<Preset> OfficeMergePresets() =>
@@ -400,7 +450,7 @@ public static class BuiltInData
         Id = "presentations",
         NameKey = "profile.presentations",
         Extensions = ExtensionsOf(FormatCategory.Presentation),
-        PresetIds = ["to-pdf", "to-png", "to-jpg", "to-pptx", "merge-pdf", "merge-pptx"],
+        PresetIds = ["to-pdf", "to-png", "to-jpg", "to-pptx", "merge-pdf", "merge-pptx", "hide"],
     };
 
     /// <summary>Markdown, plain text and HTML (added in settings schema 4, see SettingsMigrations).</summary>
@@ -425,7 +475,7 @@ public static class BuiltInData
         {
             Id = "video", NameKey = "profile.video",
             Extensions = ExtensionsOf(FormatCategory.Video),
-            PresetIds = ["to-mp4", "mp4-720", "mp4-hevc", "to-webm", "to-mov", "to-gif", "to-mp3", "extract-subtitles", "to-mkv", "to-avi"],
+            PresetIds = ["to-mp4", "mp4-720", "mp4-hevc", "to-webm", "to-mov", "to-gif", "to-mp3", "extract-subtitles", "to-mkv", "to-avi", "hide"],
         },
         new()
         {

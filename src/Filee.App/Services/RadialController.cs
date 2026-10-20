@@ -31,6 +31,8 @@ public sealed class RadialController(
     ConversionService conversions,
     WindowService windows,
     UserDataStore store,
+    TextCopyService textCopy,
+    VaultService vault,
     IPlatformServices platform,
     ILogger<RadialController> log)
 {
@@ -272,27 +274,53 @@ public sealed class RadialController(
             return;
         }
 
-        // Splitting a PDF asks where to cut first; empty keeps one file per page.
+        // Asked before it runs: where to split a PDF ("" = every page), the size to compress to, a PDF password.
         if (preset.Pdf is { SplitPages: true, Compression: PdfCompression.None } && preset.TargetFormat == "pdf")
         {
-            string? parts;
-            _editing = true;
-            try
-            {
-                parts = await windows.AskSplitPartsAsync(_window);
-            }
-            finally
-            {
-                _editing = false;
-            }
-            if (parts is null)
-            {
-                if (_visible)
-                    _window?.Activate();
+            if (await AskAsync("split.parts_question", "split.parts_hint") is not { } parts)
                 return;
-            }
             preset = preset.Clone();
             preset.Pdf.SplitParts = parts;
+        }
+        else if (preset.MaxSizeKb == Preset.AskSize)
+        {
+            int? kb = null;
+            while (kb is null)
+            {
+                if (await AskAsync("size.question", "size.hint") is not { } answer)
+                    return;
+                kb = Preset.ParseSizeKb(answer);
+            }
+            preset = preset.Clone();
+            preset.MaxSizeKb = kb.Value;
+        }
+        else if (preset.Pdf.Unlock || preset.Pdf.Protect)
+        {
+            if (await AskAsync(preset.Pdf.Unlock ? "password.unlock_question" : "password.protect_question", "password.hint", secret: true)
+                is not { Length: > 0 } password)
+                return;
+            preset = preset.Clone();
+            preset.Pdf.Password = password;
+        }
+
+        if (preset.Kind == PresetKind.CopyText)
+        {
+            log.LogInformation("Copying the text of {Count} file(s)", files.Count);
+            var length = await textCopy.CopyAsync(files);
+            ShowDone(length > 0 ? "donut.text_copied" : "donut.no_text");
+            return;
+        }
+        if (preset.Kind == PresetKind.Hide && vault.Holds(files))
+        {
+            log.LogInformation("Unhiding {Count} file(s)", files.Count);
+            ShowDone(await vault.MoveOutAsync(files) > 0 ? "donut.unhidden" : "donut.not_unhidden");
+            return;
+        }
+        if (preset.Kind == PresetKind.Hide)
+        {
+            if (await HideAsync(files) is { } hidden)
+                ShowDone(hidden > 0 ? "donut.hidden" : "donut.not_hidden");
+            return;
         }
 
         log.LogInformation("Converting {Count} file(s) with preset {Preset}", files.Count, preset.Id);
@@ -304,6 +332,69 @@ public sealed class RadialController(
         }
         _converted = true;
         ShowProgress(job);
+    }
+
+    /// <summary>Asks a question over the donut (which stays open). Null when cancelled: the donut gets the focus back.</summary>
+    private async Task<string?> AskAsync(string questionKey, string hintKey, bool secret = false)
+    {
+        _editing = true;
+        try
+        {
+            if (await windows.AskTextAsync(_window, questionKey, hintKey, secret) is { } answer)
+                return answer;
+        }
+        finally
+        {
+            _editing = false;
+        }
+        if (_visible)
+            _window?.Activate();
+        return null;
+    }
+
+    /// <summary>Moves the files into the vault (made on first use). Returns how many were hidden, or null when cancelled.</summary>
+    private async Task<int?> HideAsync(IReadOnlyList<string> files)
+    {
+        var wasOpen = vault.IsOpen;
+        if (!vault.Exists)
+        {
+            string? password;
+            do
+            {
+                password = await AskAsync("vault.create_question", "password.hint", secret: true);
+                if (password is null)
+                    return null;
+            }
+            while (password.Length < 8 || await AskAsync("vault.confirm_question", "password.hint", secret: true) is not { } again || again != password);
+            if (await vault.CreateAsync(password) is { } error)
+            {
+                log.LogWarning("Creating the vault failed: {Error}", error);
+                return 0;
+            }
+        }
+        else if (!wasOpen)
+        {
+            while (true)
+            {
+                if (await AskAsync("vault.unlock_question", "password.hint", secret: true) is not { } password)
+                    return null;
+                if (await vault.UnlockAsync(password) is null)
+                    break;
+            }
+        }
+
+        log.LogInformation("Hiding {Count} file(s)", files.Count);
+        var hidden = await vault.MoveInAsync(files);
+        if (!wasOpen)
+            await vault.LockAsync();
+        return hidden;
+    }
+
+    /// <summary>Says on the donut what an action did, then closes it.</summary>
+    private void ShowDone(string messageKey)
+    {
+        viewModel.ShowMessage(messageKey);
+        DispatcherTimer.RunOnce(() => Close(), TimeSpan.FromSeconds(1.2));
     }
 
     // ───────── Progress ring ─────────

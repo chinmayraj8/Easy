@@ -11,7 +11,8 @@ using Filee.Core.Settings;
 
 namespace Filee.App.ViewModels;
 
-public sealed partial class RadialViewModel(UserDataStore store, ILocalizer loc, PresetAvailability availability) : ObservableObject
+public sealed partial class RadialViewModel(UserDataStore store, ILocalizer loc, PresetAvailability availability, VaultService vault)
+    : ObservableObject
 {
     [ObservableProperty] private IReadOnlyList<DonutItem> _items = [];
     [ObservableProperty] private string _centerTitle = "";
@@ -75,6 +76,13 @@ public sealed partial class RadialViewModel(UserDataStore store, ILocalizer loc,
 
     public bool HasFiles => Files.Count > 0;
 
+    /// <summary>Shows what an action did (copy text, hide) in the centre.</summary>
+    public void ShowMessage(string messageKey)
+    {
+        CenterTitle = loc[messageKey];
+        CenterSubtitle = null;
+    }
+
     /// <summary>Drag mode before any file entered: an empty ring saying "Bring files here".</summary>
     public void ResetForDrag()
     {
@@ -118,6 +126,7 @@ public sealed partial class RadialViewModel(UserDataStore store, ILocalizer loc,
                 .Select(store.FindPreset).OfType<Preset>().Where(c => !c.IsGroup && Shown(c)).Take(Preset.MaxSubPresets).ToList())
             .ToList();
 
+        var unhide = vault.Holds(files);
         DonutItem ItemOf(Preset p, bool caption = true)
         {
             var reason = availability.Check(p, formats);
@@ -125,8 +134,10 @@ public sealed partial class RadialViewModel(UserDataStore store, ILocalizer loc,
             {
                 Id = p.Id,
                 // On a group's ring the group's name gives the context: "Rotate" → Left / Right / 180°.
-                Label = caption ? loc.DisplayName(p) : loc.RingName(p),
-                Caption = !caption ? null
+                // Files already in the hidden folder get "Unhide" there instead.
+                Label = p.Kind == PresetKind.Hide && unhide ? loc["preset.unhide"]
+                    : caption ? loc.DisplayName(p) : loc.RingName(p),
+                Caption = !caption || p.IsAction ? null
                     : p.TargetFormat == BuiltInData.SameAsSource
                         ? string.Join("/", formats.Select(f => f.DisplayName).Take(2))
                         : FormatLabels.NameOf(loc, p.TargetFormat),

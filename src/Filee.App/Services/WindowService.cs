@@ -250,13 +250,17 @@ public sealed class WindowService(ILocalizer loc, IServiceProvider services, Mem
         services.GetRequiredService<UpdateService>().OpenDownloadPage();
     }
 
-    /// <summary>"Split into which parts?" before a PDF split. Returns the parts typed ("" = every page), or null when cancelled.</summary>
-    public async Task<string?> AskSplitPartsAsync(Window? owner)
+    /// <summary>
+    /// Asks for a line of text (localization keys; <paramref name="secret"/> hides what is typed). Returns it trimmed (a
+    /// password as typed), or null when cancelled.
+    /// </summary>
+    public async Task<string?> AskTextAsync(Window? owner, string questionKey, string hintKey, bool secret = false)
     {
-        var input = new TextBox { PlaceholderText = loc["split.parts_hint"] };
-        return await ShowMessageAsync(owner, loc["split.parts_question"], destructive: false, withCancel: true, input)
-            ? input.Text?.Trim() ?? ""
-            : null;
+        var input = new TextBox { PlaceholderText = loc[hintKey], PasswordChar = secret ? '•' : default };
+        if (!await ShowMessageAsync(owner, loc[questionKey], destructive: false, withCancel: true, input))
+            return null;
+        var text = input.Text ?? "";
+        return secret ? text : text.Trim();
     }
 
     private async Task<bool> ShowMessageAsync(Window? owner, string message, bool destructive, bool withCancel, TextBox? input = null)

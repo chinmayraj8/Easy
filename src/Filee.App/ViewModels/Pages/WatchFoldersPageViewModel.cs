@@ -29,7 +29,7 @@ public sealed partial class WatchFoldersPageViewModel : ObservableObject, IDispo
         _service = service;
         _loc = loc;
         _conversions = conversions;
-        Presets = store.Presets.Where(p => !p.IsGroup).Select(p => new Choice<string>(p.Id, loc.DisplayName(p), FormatLabels.NameOf(loc, p.TargetFormat))).ToList();
+        Presets = store.Presets.Where(p => p.Kind == PresetKind.Convert).Select(p => new Choice<string>(p.Id, loc.DisplayName(p), FormatLabels.NameOf(loc, p.TargetFormat))).ToList();
         OriginalsChoices =
         [
             new Choice<AfterConversion>(AfterConversion.Keep, loc["watch.originals_keep"]),

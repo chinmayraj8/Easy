@@ -113,7 +113,13 @@ public sealed class JobQueue : IAsyncDisposable
                 await Parallel.ForEachAsync(
                     job.Files.Select((f, i) => (File: f, Index: i + 1)),
                     new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = CancellationToken.None },
-                    async (item, _) => await RunFileAsync(job, item.File, item.Index, planner, workDir, finalOutput: true));
+                    async (item, _) =>
+                    {
+                        if (job.Preset.MaxSizeKb > 0)
+                            await RunToSizeAsync(job, item.File, item.Index, planner, workDir);
+                        else
+                            await RunFileAsync(job, item.File, item.Index, planner, workDir, finalOutput: true);
+                    });
 
             job.State = job.CancellationToken.IsCancellationRequested ? JobState.Cancelled
                 : job.Files.All(f => f.State is FileState.Done or FileState.Skipped) ? JobState.Completed
@@ -365,9 +371,10 @@ public sealed class JobQueue : IAsyncDisposable
     /// </summary>
     private async Task<IReadOnlyList<string>> RunFileAsync(
         ConversionJob job, FileResult file, int index, RoutePlanner planner, string workDir, bool finalOutput,
-        string intermediate = "pdf")
+        string intermediate = "pdf", Preset? preset = null)
     {
         var ct = job.CancellationToken;
+        var jobPreset = preset ?? job.Preset;
         var source = FormatRegistry.Detect(file.SourcePath);
         if (source is null)
             return Fail(file, "error.unsupported_source", "." + FormatRegistry.ExtensionOf(file.SourcePath));
@@ -377,21 +384,21 @@ public sealed class JobQueue : IAsyncDisposable
             return Fail(file, "error.empty_file", null);
 
         var target = !finalOutput ? intermediate
-            : job.Preset.TargetFormat == BuiltInData.SameAsSource ? source.Id
-            : job.Preset.TargetFormat;
+            : jobPreset.TargetFormat == BuiltInData.SameAsSource ? source.Id
+            : jobPreset.TargetFormat;
 
         // "Save every frame": a video becomes a folder of pictures in one step of its own. Never for an intermediate
         // file, and never on the way to another format (video → JPG is otherwise one still frame).
-        var route = planner.Plan(source.Id, target, frames: finalOutput && job.Preset.SavesFramesOf(source.Id));
+        var route = planner.Plan(source.Id, target, frames: finalOutput && jobPreset.SavesFramesOf(source.Id));
         if (route is null)
             return Fail(file, "error.no_route", $"{source.Id} → {target}");
 
         // Rotate / flip: only an engine that turns images does it. Without one the file would come out unturned
         // (a PDF or a video re-encoded "as rotated"); with two in the route (EPS → PNG → JPG) it would turn twice.
-        var turnAt = job.Preset.Image.TurnsOrMirrors ? route.FirstTransformStep() : -1;
-        if (job.Preset.Image.TurnsOrMirrors && turnAt < 0)
+        var turnAt = jobPreset.Image.TurnsOrMirrors ? route.FirstTransformStep() : -1;
+        if (jobPreset.Image.TurnsOrMirrors && turnAt < 0)
             return Fail(file, "error.cannot_turn", $"{source.Id} → {target}");
-        var unturned = turnAt < 0 ? job.Preset : Unturned(job.Preset);
+        var unturned = turnAt < 0 ? jobPreset : Unturned(jobPreset);
 
         file.State = FileState.Running;
         Notify(job);
@@ -428,12 +435,12 @@ public sealed class JobQueue : IAsyncDisposable
                     {
                         // Turned once, in step turnAt: every other step gets the preset without rotation and flip,
                         // also one before it whose engine applies image options but doesn't say it turns.
-                        var preset = s == turnAt ? job.Preset : unturned;
+                        var stepPreset = s == turnAt ? jobPreset : unturned;
                         // Playback speed changes once, in the step that writes the output: an animation passed from one
                         // engine to another would otherwise change speed in both.
-                        if (preset.Image.ChangesSpeed && !(isLast && finalOutput))
-                            preset = AtOriginalSpeed(preset);
-                        var stepInfo = new ConversionStep(input, step.From, step.To, preset, allocator, workDir, step.FrameSequence,
+                        if (stepPreset.Image.ChangesSpeed && !(isLast && finalOutput))
+                            stepPreset = AtOriginalSpeed(stepPreset);
+                        var stepInfo = new ConversionStep(input, step.From, step.To, stepPreset, allocator, workDir, step.FrameSequence,
                             key => file.NoticeKey = key);
                         outputs.AddRange(await step.Converter.ConvertAsync(stepInfo, progress, ct));
                     }
@@ -448,7 +455,7 @@ public sealed class JobQueue : IAsyncDisposable
             if (finalOutput)
             {
                 file.Outputs.AddRange(inputs);
-                if (job.Preset.Output.KeepDates)
+                if (jobPreset.Output.KeepDates)
                     CopyDates(file.SourcePath, inputs);
             }
             file.State = inputs.Count == 0 && finalOutput ? FileState.Skipped : FileState.Done;
@@ -496,6 +503,80 @@ public sealed class JobQueue : IAsyncDisposable
             f.Progress = 1;
             Notify(job);
             return [];
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Preset.MaxSizeKb"/>: converts the file again, each time smaller (<see cref="SizeAttempts"/>), until it
+    /// fits. The first attempt that fits is saved, else the smallest with a notice.
+    /// </summary>
+    private async Task RunToSizeAsync(ConversionJob job, FileResult file, int index, RoutePlanner planner, string workDir)
+    {
+        var limit = job.Preset.MaxSizeKb * 1024L;
+        var target = job.Preset.TargetFormat == BuiltInData.SameAsSource
+            ? FormatRegistry.Detect(file.SourcePath)?.Id ?? ""
+            : job.Preset.TargetFormat;
+        string? best = null;
+        var bestSize = long.MaxValue;
+        foreach (var attempt in SizeAttempts(job.Preset, target))
+        {
+            var produced = await RunFileAsync(job, file, index, planner, workDir, finalOutput: false, intermediate: target, attempt);
+            if (file.State != FileState.Done || produced.Count != 1)
+                return; // failed, cancelled, or several files (pages) that no single limit fits
+            var size = new FileInfo(produced[0]).Length;
+            if (size < bestSize)
+                (best, bestSize) = (produced[0], size);
+            if (size <= limit)
+                break;
+        }
+        if (best is null)
+            return;
+        if (bestSize > limit)
+            file.NoticeKey = "notice.size_not_reached";
+
+        var output = CreateFinalAllocator(job, file.SourcePath, index).Allocate(Path.GetExtension(best).TrimStart('.'));
+        if (output is null)
+        {
+            file.State = FileState.Skipped;
+            Notify(job);
+            return;
+        }
+        File.Move(best, output, overwrite: true);
+        file.Outputs.Add(output);
+        if (job.Preset.Output.KeepDates)
+            CopyDates(file.SourcePath, [output]);
+        Notify(job);
+    }
+
+    /// <summary>Ever smaller versions of a preset: lower quality for lossy formats, then smaller pictures.</summary>
+    internal static IEnumerable<Preset> SizeAttempts(Preset preset, string target)
+    {
+        // ponytail: a PDF stops at 72 dpi pictures; splitting or rasterizing pages would go further.
+        if (target == "pdf")
+        {
+            yield return With(p => p.Pdf.Compression = PdfCompression.Ebook);
+            yield return With(p => p.Pdf.Compression = PdfCompression.Screen);
+            yield break;
+        }
+        if (target is "jpg" or "webp" or "avif" or "heic" or "jxl")
+            foreach (var quality in new[] { 85, 70, 55, 40, 25 })
+                yield return With(p => p.Image.Quality = quality);
+        else
+            yield return With(_ => { });
+        foreach (var percent in new[] { 75, 50, 35, 25, 15 })
+            yield return With(p =>
+            {
+                p.Image.Quality = Math.Min(p.Image.Quality, 60);
+                p.Image.Resize = ResizeMode.Percent;
+                p.Image.ResizePercent = percent;
+            });
+
+        Preset With(Action<Preset> change)
+        {
+            var copy = preset.Clone();
+            copy.MaxSizeKb = 0;
+            change(copy);
+            return copy;
         }
     }
 

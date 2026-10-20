@@ -817,7 +817,7 @@ public class UserDataStoreTests
         var compress = presets.Single(p => p.Id == "compress-pdf");
         Assert.Equal(("pdf", PdfCompression.Ebook, false), (compress.TargetFormat, compress.Pdf.Compression, compress.Pdf.CompressWithGhostscript));
         Assert.Equal("pdf-split", presets[presets.IndexOf(compress) - 1].Id); // where a new library has it
-        Assert.Equal("compress-pdf", profiles.Single(p => p.Id == "pdf").PresetIds[^1]); // v27
+        Assert.Contains("compress-pdfs", profiles.Single(p => p.Id == "pdf").PresetIds); // v28: in the "Compress" group
         Assert.Equal(BuiltInData.CreateProfiles().Single(p => p.Id == "pdf").PresetIds, profiles.Single(p => p.Id == "pdf").PresetIds);
         Assert.False(SettingsMigrations.ApplyToLibrary(17, presets, profiles)); // once only
     }
@@ -997,4 +997,34 @@ public class UserDataStoreTests
         Assert.NotNull(target.FindPreset("shared"));
         Assert.Single(target.Profiles, p => p.IsFallback);
     }
+
+    [Fact]
+    public void Version_27_libraries_get_the_tool_slices_and_groups_once()
+    {
+        // As written with schema 27: the images and PDF donuts as they were then, without the schema 28 presets.
+        var presets = BuiltInData.CreatePresets();
+        var tools = BuiltInData.ToolPresets().Select(p => p.Id).ToHashSet();
+        presets.RemoveAll(p => tools.Contains(p.Id));
+        var profiles = BuiltInData.CreateProfiles();
+        profiles.Single(p => p.Id == "images").PresetIds = ["to-png", "to-jpg", "to-webp", "to-pdf", "trace-svg", "trace-line-art", "half-size", "compress-image"];
+        profiles.Single(p => p.Id == "pdf").PresetIds = [.. BuiltInData.PdfDonutBefore28];
+        foreach (var profile in profiles)
+            profile.PresetIds.Remove("hide");
+
+        Assert.True(SettingsMigrations.ApplyToLibrary(27, presets, profiles));
+
+        foreach (var expected in BuiltInData.CreateProfiles())
+            Assert.Equal(expected.PresetIds, profiles.Single(p => p.Id == expected.Id).PresetIds);
+        Assert.All(tools, id => Assert.Contains(presets, p => p.Id == id));
+        Assert.False(SettingsMigrations.ApplyToLibrary(27, presets, profiles)); // once only
+    }
+
+    [Theory]
+    [InlineData("200", 200)]
+    [InlineData("200 KB", 200)]
+    [InlineData("2 MB", 2048)]
+    [InlineData("1.5mb", 1536)]
+    [InlineData("abc", null)]
+    [InlineData("0", null)]
+    public void Sizes_are_read_in_kilobytes(string text, int? kb) => Assert.Equal(kb, Preset.ParseSizeKb(text));
 }

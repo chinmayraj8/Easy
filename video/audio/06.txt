@@ -1,1 +1,0 @@
-Add FFmpeg for video and audio. Convert video formats, extract audio, create animated GIFs, or export frames. Presets control quality, resolution, and compatible codecs. Text subtitles can also be converted, with hardware encoding available for supported setups.

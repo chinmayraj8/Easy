@@ -1,1 +1,0 @@
-Turn images into web friendly formats, resize them, or build a PDF. Merge documents, split pages, select a page range, or compress a PDF. Extract text or page images for the next step in your work.
