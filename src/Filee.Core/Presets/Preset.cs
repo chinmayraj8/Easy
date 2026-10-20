@@ -391,6 +391,15 @@ public sealed class PdfOptions
     /// </summary>
     public string SplitParts { get; set; } = "";
 
+    /// <summary>For PDF → PDF: write the pages in <see cref="PageOrder"/>.</summary>
+    public bool Reorder { get; set; }
+
+    /// <summary>
+    /// With <see cref="Reorder"/>: the new order, e.g. <c>"3, 1-2"</c> or <c>"10-1"</c> (reversed); pages left out follow
+    /// in their order. Asked when it runs from the donut.
+    /// </summary>
+    public string PageOrder { get; set; } = "";
+
     /// <summary>For PDF → image: stack the pages into one tall image instead of one image per page.</summary>
     public bool CombinePages { get; set; }
 

@@ -624,6 +624,16 @@ internal static class SettingsMigrations
                      })
                 changed |= Offer(presets, profiles, profile, preset, null);
         }
+        // v29: reorder PDF pages, in a "Pages" group where "Split PDF" was.
+        if (from < 29)
+        {
+            foreach (var preset in BuiltInData.PagePresets().Where(p => presets.All(existing => existing.Id != p.Id)))
+            {
+                presets.Add(preset);
+                changed = true;
+            }
+            changed |= Swap(profiles.FirstOrDefault(p => p.Id == "pdf"), "pdf-split", "pdf-pages");
+        }
         return changed;
     }
 

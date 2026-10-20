@@ -1,5 +1,6 @@
 using Filee.Core.Conversion;
 using Filee.Core.Presets;
+using Filee.Engines.Pdf;
 using ImageMagick;
 using PdfSharp.Pdf.IO;
 
@@ -391,6 +392,30 @@ public class ImageAndPdfTests(EngineFixture fx) : IClassFixture<EngineFixture>
         Assert.Equal(["pages_p1-2.pdf", "pages_p3.pdf", "pages_p4-5.pdf"], job.Outputs.Select(Path.GetFileName).Order(StringComparer.Ordinal));
         using var last = PdfReader.Open(job.Outputs.Single(o => o.EndsWith("_p4-5.pdf")), PdfDocumentOpenMode.Import);
         Assert.Equal(2, last.PageCount);
+    }
+
+    [Theory]
+    [InlineData("3, 1-2", new[] { 2, 0, 1, 3, 4 })]
+    [InlineData("5-1", new[] { 4, 3, 2, 1, 0 })]
+    [InlineData("4-, 2, 2, x, 99", new[] { 3, 4, 1, 0, 2 })]
+    [InlineData("", new[] { 0, 1, 2, 3, 4 })]
+    public void Reordered_pages_take_each_page_once(string order, int[] expected) =>
+        Assert.Equal(expected, PdfSharpConverter.Reordered(order, 5));
+
+    [Fact]
+    public async Task Reorder_pdf_keeps_every_page()
+    {
+        var dir = fx.NewFolder();
+        var pdf = (await fx.ConvertAsync([EngineFixture.MakeMultiPageTiff(dir, 3)], new Preset { TargetFormat = "pdf" })).Outputs.Single();
+
+        var job = await fx.ConvertAsync([pdf], new Preset
+        {
+            TargetFormat = "pdf", Pdf = { Reorder = true, PageOrder = "3-1" }, Output = { FileNamePattern = "{name}_reordered" },
+        });
+
+        AssertDone(job);
+        using var result = PdfReader.Open(job.Outputs.Single(), PdfDocumentOpenMode.Import);
+        Assert.Equal(3, result.PageCount);
     }
 
     [Fact]

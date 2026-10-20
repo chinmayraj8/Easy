@@ -18,6 +18,7 @@ using Filee.App.Controls;
 using Filee.App.ViewModels;
 using Filee.App.Views;
 using Filee.Core.Conversion;
+using Filee.Core.Formats;
 using Filee.Core.Platform;
 using Filee.Core.Presets;
 using Filee.Core.Profiles;
@@ -274,13 +275,24 @@ public sealed class RadialController(
             return;
         }
 
-        // Asked before it runs: where to split a PDF ("" = every page), the size to compress to, a PDF password.
+        // Asked before it runs: where to split a PDF ("" = every page), the new page order, the size to compress to, a PDF password.
         if (preset.Pdf is { SplitPages: true, Compression: PdfCompression.None } && preset.TargetFormat == "pdf")
         {
             if (await AskAsync("split.parts_question", "split.parts_hint") is not { } parts)
                 return;
             preset = preset.Clone();
             preset.Pdf.SplitParts = parts;
+        }
+        else if (preset.Pdf.Reorder)
+        {
+            // One PDF: its pages to drag into place; several: the order typed, for each of them.
+            var order = files.Count == 1 && FormatRegistry.Detect(files[0])?.Id == "pdf"
+                ? await PickPageOrderAsync(files[0])
+                : await AskAsync("reorder.question", "reorder.hint");
+            if (order is null)
+                return;
+            preset = preset.Clone();
+            preset.Pdf.PageOrder = order;
         }
         else if (preset.MaxSizeKb == Preset.AskSize)
         {
@@ -342,6 +354,23 @@ public sealed class RadialController(
         {
             if (await windows.AskTextAsync(_window, questionKey, hintKey, secret) is { } answer)
                 return answer;
+        }
+        finally
+        {
+            _editing = false;
+        }
+        if (_visible)
+            _window?.Activate();
+        return null;
+    }
+
+    private async Task<string?> PickPageOrderAsync(string pdf)
+    {
+        _editing = true;
+        try
+        {
+            if (await windows.PickPageOrderAsync(pdf) is { } order)
+                return order;
         }
         finally
         {

@@ -74,6 +74,7 @@ public static class BuiltInData
             Id = "pdf-split", NameKey = "preset.split_pdf", TargetFormat = "pdf",
             Pdf = { SplitPages = true }, Output = { Location = OutputLocation.Subfolder, SubfolderName = "{name}" },
         },
+        .. PagePresets(),
         .. PdfCompressionPresets(),
         .. PdfSlidesPresets(),
         .. FramePresets(),
@@ -365,7 +366,7 @@ public static class BuiltInData
     /// stays a preset to add in Settings → Toolbar.
     /// </summary>
     public static readonly IReadOnlyList<string> PdfDonut =
-        ["to-png", "to-jpg", "pdf-long-image", "to-docx", "pdf-slides", "pdf-text", "pdf-split", "merge-pdf", "compress-pdfs", "pdf-password", "copy-text", "hide"];
+        ["to-png", "to-jpg", "pdf-long-image", "to-docx", "pdf-slides", "pdf-text", "pdf-pages", "merge-pdf", "compress-pdfs", "pdf-password", "copy-text", "hide"];
 
     /// <summary>The PDF donut of settings schema 27, which schema 28 replaces when the user never changed it.</summary>
     public static readonly IReadOnlyList<string> PdfDonutBefore28 =
@@ -426,6 +427,21 @@ public static class BuiltInData
         {
             Id = "pdf-text", NameKey = "preset.group_text", TargetFormat = Preset.GroupTarget, Kind = PresetKind.Group,
             SubPresetIds = ["to-txt", "to-md", "to-epub"],
+        },
+    ];
+
+    /// <summary>Reorder PDF pages, and the "Pages" group that holds it with "Split PDF" (added in settings schema 29).</summary>
+    public static IEnumerable<Preset> PagePresets() =>
+    [
+        new()
+        {
+            Id = "reorder-pdf", NameKey = "preset.reorder_pdf", TargetFormat = "pdf",
+            Pdf = { Reorder = true }, Output = { FileNamePattern = "{name}_reordered" },
+        },
+        new()
+        {
+            Id = "pdf-pages", NameKey = "preset.group_pages", TargetFormat = Preset.GroupTarget, Kind = PresetKind.Group,
+            SubPresetIds = ["pdf-split", "reorder-pdf"],
         },
     ];
 

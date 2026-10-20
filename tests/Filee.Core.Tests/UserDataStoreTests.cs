@@ -1019,6 +1019,22 @@ public class UserDataStoreTests
         Assert.False(SettingsMigrations.ApplyToLibrary(27, presets, profiles)); // once only
     }
 
+    [Fact]
+    public void Version_28_libraries_get_reorder_pages_in_a_pages_group_once()
+    {
+        var presets = BuiltInData.CreatePresets();
+        presets.RemoveAll(p => p.Id is "reorder-pdf" or "pdf-pages");
+        var profiles = BuiltInData.CreateProfiles();
+        var pdf = profiles.Single(p => p.Id == "pdf");
+        pdf.PresetIds[pdf.PresetIds.IndexOf("pdf-pages")] = "pdf-split";
+
+        Assert.True(SettingsMigrations.ApplyToLibrary(28, presets, profiles));
+
+        Assert.Equal(BuiltInData.PdfDonut, pdf.PresetIds);
+        Assert.Contains(presets, p => p.Id == "reorder-pdf");
+        Assert.False(SettingsMigrations.ApplyToLibrary(28, presets, profiles)); // once only
+    }
+
     [Theory]
     [InlineData("200", 200)]
     [InlineData("200 KB", 200)]

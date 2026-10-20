@@ -165,7 +165,8 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
     private static IReadOnlyList<string> SplitOrExtract(ConversionStep step, IProgress<double>? progress, CancellationToken ct)
     {
         using var source = Open(step.InputPath, PdfDocumentOpenMode.Import);
-        var pages = PageRange.Parse(step.Preset.Pdf.PageRange, source.PageCount);
+        var pages = step.Preset.Pdf.Reorder ? Reordered(step.Preset.Pdf.PageOrder, source.PageCount)
+            : PageRange.Parse(step.Preset.Pdf.PageRange, source.PageCount);
         var written = new List<string>();
 
         if (step.Preset.Pdf.SplitPages)
@@ -210,6 +211,40 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
                 .Select(part => PageRange.Parse(part, pageCount))
                 .Where(part => part.Count > 0)
                 .ToList();
+
+    /// <summary>
+    /// Every page once, zero-based, in the order of <paramref name="expression"/> ("3, 1-2", "10-1" reversed); the pages
+    /// it leaves out follow in their order. Out-of-range pages are clamped, unreadable parts ignored.
+    /// </summary>
+    internal static List<int> Reordered(string expression, int pageCount)
+    {
+        var order = new List<int>();
+        if (pageCount <= 0)
+            return order;
+        foreach (var part in expression.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var dash = part.IndexOf('-');
+            if (!TryPage(dash < 0 ? part : part[..dash], 1, out var from) || !TryPage(dash < 0 ? part : part[(dash + 1)..], pageCount, out var to))
+                continue;
+            var step = from <= to ? 1 : -1;
+            for (var p = from; p != to + step; p += step)
+                if (!order.Contains(p - 1))
+                    order.Add(p - 1);
+        }
+        order.AddRange(Enumerable.Range(0, pageCount).Except(order));
+        return order;
+
+        bool TryPage(string text, int empty, out int page)
+        {
+            text = text.Trim();
+            if (text.Length == 0)
+                page = empty;
+            else if (!int.TryParse(text, out page))
+                return false;
+            page = Math.Clamp(page, 1, pageCount);
+            return true;
+        }
+    }
 
     /// <summary>
     /// PDF → a smaller PDF (<see cref="PdfOptions.Compression"/>), also with a page range or one file per page: the whole
