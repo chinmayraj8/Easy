@@ -26,14 +26,14 @@ public sealed class PresetAvailability(ConverterCatalog catalog, ILocalizer loc,
         if (formats.Count == 0)
             return loc["error.unsupported_source"];
 
-        var merge = preset.Pdf.MergeIntoSingle && preset.TargetFormat == "pdf";
+        var merge = preset.Pdf.MergeIntoSingle && preset.TargetFormat is "pdf" or "docx" or "pptx";
         var turns = preset.Image.TurnsOrMirrors;
         string TargetFor(FileFormat f) => preset.TargetFormat == BuiltInData.SameAsSource ? f.Id : preset.TargetFormat;
         var copiesUnturned = false;
         bool Possible(RoutePlanner planner) => formats.Any(f =>
         {
             var target = TargetFor(f);
-            if (merge && f.Id == "pdf" && !turns)
+            if (merge && f.Id == target && !turns)
                 return true; // merged as it is
             var frames = preset.SavesFramesOf(f.Id);
             if (!turns)

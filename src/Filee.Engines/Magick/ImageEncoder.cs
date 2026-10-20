@@ -275,9 +275,9 @@ internal static class ImageEncoder
         }
 
         var quality = (uint)Math.Clamp(options.Quality, 1, 100);
-        // Turning a JPEG has to re-encode it: at the photo's own quality (Magick's estimate when it read the file), not
-        // above it, or a phone photo saved at 75 comes back at 95, bigger and no better.
-        if (options.TurnsOrMirrors && targetFormat == "jpg" && image.Format == MagickFormat.Jpeg && image.Quality is > 0 and <= 100)
+        // A JPEG saved as JPEG again (turned, resized, compressed) is re-encoded at most at the photo's own quality (Magick's
+        // estimate when it read the file), or a phone photo saved at 75 comes back at 95, bigger and no better.
+        if (targetFormat == "jpg" && image.Format == MagickFormat.Jpeg && image.Quality is > 0 and <= 100)
             quality = Math.Min(quality, image.Quality);
         switch (targetFormat)
         {

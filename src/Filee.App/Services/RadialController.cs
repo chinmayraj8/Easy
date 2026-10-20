@@ -19,6 +19,7 @@ using Filee.App.ViewModels;
 using Filee.App.Views;
 using Filee.Core.Conversion;
 using Filee.Core.Platform;
+using Filee.Core.Presets;
 using Filee.Core.Profiles;
 using Filee.Core.Settings;
 using Microsoft.Extensions.Logging;
@@ -263,12 +264,35 @@ public sealed class RadialController(
     }
 
     /// <summary>Converts with slice <paramref name="index"/>, or with slice <paramref name="sub"/> of that group's ring.</summary>
-    private void Convert(int index, int sub, IReadOnlyList<string> files)
+    private async void Convert(int index, int sub, IReadOnlyList<string> files)
     {
         if (viewModel.PresetAt(index, sub) is not { } preset || files.Count == 0)
         {
             Close();
             return;
+        }
+
+        // Splitting a PDF asks where to cut first; empty keeps one file per page.
+        if (preset.Pdf is { SplitPages: true, Compression: PdfCompression.None } && preset.TargetFormat == "pdf")
+        {
+            string? parts;
+            _editing = true;
+            try
+            {
+                parts = await windows.AskSplitPartsAsync(_window);
+            }
+            finally
+            {
+                _editing = false;
+            }
+            if (parts is null)
+            {
+                if (_visible)
+                    _window?.Activate();
+                return;
+            }
+            preset = preset.Clone();
+            preset.Pdf.SplitParts = parts;
         }
 
         log.LogInformation("Converting {Count} file(s) with preset {Preset}", files.Count, preset.Id);

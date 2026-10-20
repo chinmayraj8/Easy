@@ -17,6 +17,7 @@ public sealed class JobQueue : IAsyncDisposable
     private readonly IPdfMerger? _pdfMerger;
     private readonly IFileCombiner? _combiner;
     private readonly ITiffMerger? _tiffMerger;
+    private readonly IOfficeMerger? _officeMerger;
     private readonly ILogger _log;
     private readonly Channel<ConversionJob> _channel = Channel.CreateUnbounded<ConversionJob>();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _engineGates = new();
@@ -29,9 +30,11 @@ public sealed class JobQueue : IAsyncDisposable
     /// <param name="log">Optional logger.</param>
     /// <param name="combiner">Used by "Compress into one archive" presets (<see cref="ArchiveOptions.CombineIntoOne"/>).</param>
     /// <param name="tiffMerger">Used by multi-page TIFF presets (<see cref="ImageOptions.MultiPageTiff"/>).</param>
+    /// <param name="officeMerger">Used by "Merge DOCX" and "Merge PPTX" presets.</param>
     public JobQueue(ConverterCatalog catalog, IPdfMerger? pdfMerger = null, ILogger<JobQueue>? log = null, IFileCombiner? combiner = null,
-        ITiffMerger? tiffMerger = null)
+        ITiffMerger? tiffMerger = null, IOfficeMerger? officeMerger = null)
     {
+        _officeMerger = officeMerger;
         _catalog = catalog;
         _pdfMerger = pdfMerger;
         _combiner = combiner;
@@ -84,9 +87,13 @@ public sealed class JobQueue : IAsyncDisposable
         {
             var planner = _catalog.CreatePlanner();
             var merge = job.Preset.Pdf.MergeIntoSingle
-                        && job.Preset.TargetFormat == "pdf"
                         && job.Files.Count > 1
-                        && _pdfMerger is not null;
+                        && job.Preset.TargetFormat switch
+                        {
+                            "pdf" => _pdfMerger is not null,
+                            "docx" or "pptx" => _officeMerger is not null,
+                            _ => false,
+                        };
             // Any files, one of them or many, archives or not: they go into the archive as they are.
             var combine = job.Preset.Archive.CombineIntoOne
                           && _combiner is not null
@@ -130,21 +137,22 @@ public sealed class JobQueue : IAsyncDisposable
         JobFinished?.Invoke(this, job);
     }
 
-    /// <summary>Converts every file to PDF in the work directory, then merges them into one output.</summary>
+    /// <summary>Converts every file to the target (PDF, DOCX or PPTX) in the work directory, then merges them into one output.</summary>
     private async Task RunMergedAsync(ConversionJob job, RoutePlanner planner, string workDir)
     {
+        var format = job.Preset.TargetFormat;
         var parts = new string?[job.Files.Count];
         await Parallel.ForEachAsync(Enumerable.Range(0, job.Files.Count),
             new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
             async (i, _) =>
             {
                 var file = job.Files[i];
-                // An empty PDF goes the long way, where it fails as empty instead of breaking the whole merge.
-                if (FormatRegistry.Detect(file.SourcePath)?.Id == "pdf" && !IsEmptyFile(file.SourcePath))
+                // An empty file goes the long way, where it fails as empty instead of breaking the whole merge.
+                if (FormatRegistry.Detect(file.SourcePath)?.Id == format && !IsEmptyFile(file.SourcePath))
                 {
-                    // Already a PDF, merged as it is: its pages can't be turned (only images going into it can).
+                    // Already in the format, merged as it is: its pages can't be turned (only images going into it can).
                     if (job.Preset.Image.TurnsOrMirrors)
-                        FailUnturned(job, file, "pdf → pdf");
+                        FailUnturned(job, file, $"{format} → {format}");
                     else
                         parts[i] = file.SourcePath;
                     return;
@@ -159,14 +167,17 @@ public sealed class JobQueue : IAsyncDisposable
 
         var first = job.Files[0];
         var allocator = CreateFinalAllocator(job, first.SourcePath, 1);
-        var output = allocator.Allocate("pdf");
+        var output = allocator.Allocate(format);
         if (output is null)
         {
             foreach (var f in job.Files) f.State = FileState.Skipped;
             return;
         }
 
-        await _pdfMerger!.MergeAsync(inputs, output, job.CancellationToken);
+        if (format == "pdf")
+            await _pdfMerger!.MergeAsync(inputs, output, job.CancellationToken);
+        else
+            await _officeMerger!.MergeAsync(inputs, output, format, job.CancellationToken);
         first.Outputs.Add(output);
         foreach (var f in job.Files.Where(f => f.State != FileState.Failed))
         {

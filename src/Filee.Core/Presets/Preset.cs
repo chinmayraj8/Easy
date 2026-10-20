@@ -326,7 +326,7 @@ public enum PdfCompression
 /// <summary>PDF related options.</summary>
 public sealed class PdfOptions
 {
-    /// <summary>Combine all dropped files into one PDF instead of one PDF per file.</summary>
+    /// <summary>Combine all dropped files into one file (PDF, DOCX or PPTX: the target) instead of one per file.</summary>
     public bool MergeIntoSingle { get; set; }
 
     public PdfPageSize PageSize { get; set; } = PdfPageSize.FitImage;
@@ -342,6 +342,12 @@ public sealed class PdfOptions
 
     /// <summary>For PDF → PDF: write every page as its own file.</summary>
     public bool SplitPages { get; set; }
+
+    /// <summary>
+    /// With <see cref="SplitPages"/>: the parts to write instead of single pages, e.g. <c>"1-3, 4-8, 9-"</c> (one file per
+    /// comma-separated part). Asked when the split runs from the donut; empty means one file per page.
+    /// </summary>
+    public string SplitParts { get; set; } = "";
 
     /// <summary>For PDF → image: stack the pages into one tall image instead of one image per page.</summary>
     public bool CombinePages { get; set; }

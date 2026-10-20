@@ -84,7 +84,7 @@ internal sealed class OpcPackage : IDisposable
 
     private static string Folder(string path) => path.Contains('/') ? path[..path.LastIndexOf('/')] : "";
 
-    private static string ResolvePath(string folder, string target)
+    internal static string ResolvePath(string folder, string target)
     {
         if (target.StartsWith('/'))
             return target.TrimStart('/');

@@ -12,7 +12,7 @@ using Filee.Engines.Infrastructure;
 namespace Filee.Engines.Office;
 
 /// <summary>Converts between the variants of Word, Excel and PowerPoint files by rewriting the package.</summary>
-public sealed class OoxmlConverter : IConverter
+public sealed class OoxmlConverter : IConverter, IOfficeMerger
 {
     private static readonly XNamespace ContentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace RelationshipsNs = "http://schemas.openxmlformats.org/package/2006/relationships";
@@ -59,6 +59,9 @@ public sealed class OoxmlConverter : IConverter
            where source.Key != target.Key && source.Value.Family == target.Value.Family
            select new ConversionEdge(source.Key, target.Key),
     ];
+
+    public Task MergeAsync(IReadOnlyList<string> inputPaths, string outputPath, string format, CancellationToken cancellationToken) =>
+        Task.Run(() => OoxmlMerger.Merge(inputPaths, outputPath, format), cancellationToken);
 
     public EngineStatus GetStatus() => EngineStatus.Available("DOCM, DOTX, DOTM ↔ DOCX; XLSM, XLTX ↔ XLSX; PPTM, POTX, PPSX ↔ PPTX", EngineVersions.BuiltIn);
 

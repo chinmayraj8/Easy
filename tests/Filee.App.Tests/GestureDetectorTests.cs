@@ -139,38 +139,35 @@ public class GestureDetectorTests
     }
 
     [Fact]
-    public void Tapped_modifier_arms_the_next_plain_drag_once()
+    public void Tapping_the_drag_modifier_alone_opens_the_donut_at_the_cursor()
     {
         var detector = Create(CtrlDrag);
-        var started = 0;
-        detector.DragStarted += (_, _, _) => started++;
+        (int X, int Y)? at = null;
+        detector.KeyChordTriggered += (_, x, y) => at = (x, y);
 
+        detector.MouseMove(40, 50, ModifierKeys.None);
         detector.KeyDown("LeftControl", ModifierKeys.Ctrl);
         detector.KeyUp("LeftControl");
-        detector.MouseDown(TriggerMouseButton.Left, 0, 0, ModifierKeys.None);
-        detector.MouseMove(50, 0, ModifierKeys.None, TriggerMouseButton.Left);
-        detector.MouseUp(TriggerMouseButton.Left, 50, 0);
-        Assert.Equal(1, started);
 
-        detector.MouseDown(TriggerMouseButton.Left, 0, 0, ModifierKeys.None); // latch is used up
-        detector.MouseMove(50, 0, ModifierKeys.None, TriggerMouseButton.Left);
-        Assert.Equal(1, started);
+        Assert.Equal((40, 50), at);
     }
 
     [Fact]
-    public void Modifier_used_with_another_key_does_not_latch()
+    public void Modifier_used_with_a_key_or_a_click_does_not_open_the_donut()
     {
         var detector = Create(CtrlDrag);
-        var started = 0;
-        detector.DragStarted += (_, _, _) => started++;
+        var opened = 0;
+        detector.KeyChordTriggered += (_, _, _) => opened++;
 
         detector.KeyDown("LeftControl", ModifierKeys.Ctrl);
         detector.KeyDown("C", ModifierKeys.Ctrl); // Ctrl+C, not a tap
         detector.KeyUp("C");
         detector.KeyUp("LeftControl");
-        detector.MouseDown(TriggerMouseButton.Left, 0, 0, ModifierKeys.None);
-        detector.MouseMove(50, 0, ModifierKeys.None, TriggerMouseButton.Left);
+        detector.KeyDown("LeftControl", ModifierKeys.Ctrl);
+        detector.MouseDown(TriggerMouseButton.Left, 0, 0, ModifierKeys.Ctrl); // Ctrl+click
+        detector.MouseUp(TriggerMouseButton.Left, 0, 0);
+        detector.KeyUp("LeftControl");
 
-        Assert.Equal(0, started);
+        Assert.Equal(0, opened);
     }
 }

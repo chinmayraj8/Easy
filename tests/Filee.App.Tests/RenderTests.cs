@@ -470,7 +470,7 @@ public class RenderTests
         window.DonutControl.SetExternalHighlight(1);
         Pump();
 
-        Assert.Equal(10, vm.Items.Count); // with "Trace to SVG" and "Line art to SVG"
+        Assert.Equal(8, vm.Items.Count); // with "Trace to SVG", "Line art to SVG" and "Compress"
         Assert.Equal("3 × JPG", vm.CenterTitle);
         Save(window, "donut-images-en.png");
         window.Close();

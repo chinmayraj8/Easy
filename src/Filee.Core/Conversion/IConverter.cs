@@ -146,6 +146,13 @@ public interface IPdfMerger
     Task MergeAsync(IReadOnlyList<string> inputPaths, string outputPath, CancellationToken cancellationToken);
 }
 
+/// <summary>Merges several Word (DOCX) or PowerPoint (PPTX) files into one. Implemented by the OOXML engine.</summary>
+public interface IOfficeMerger
+{
+    /// <param name="format"><c>"docx"</c> or <c>"pptx"</c>; every input is of that format.</param>
+    Task MergeAsync(IReadOnlyList<string> inputPaths, string outputPath, string format, CancellationToken cancellationToken);
+}
+
 /// <summary>
 /// Writes TIFF pages (and every page of multi-page TIFFs) into one multi-page TIFF, in order. Implemented by the
 /// ImageMagick engine; <see cref="JobQueue"/> uses it when a preset sets <see cref="Presets.ImageOptions.MultiPageTiff"/>.

@@ -25,7 +25,7 @@ public class PdfSlidesTests(EngineFixture fx) : IClassFixture<EngineFixture>
     private const double A4Width = 595, A4Height = 842;
 
     /// <summary>A PDF with one page per size, each with "Page n" and a line of text on it.</summary>
-    private static string MakePdf(string folder, params (double Width, double Height)[] pages)
+    internal static string MakePdf(string folder, params (double Width, double Height)[] pages)
     {
         var pdf = new PdfBuilder();
         for (var i = 0; i < pages.Length; i++)
@@ -81,7 +81,7 @@ public class PdfSlidesTests(EngineFixture fx) : IClassFixture<EngineFixture>
     /// No schema or semantic error for PowerPoint (Open XML SDK), every part has a content type and every relationship
     /// a target.
     /// </summary>
-    private static void ValidPackage(string pptx)
+    internal static void ValidPackage(string pptx)
     {
         using (var document = PresentationDocument.Open(pptx, false))
         {

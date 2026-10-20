@@ -55,7 +55,8 @@ public static class AppHost
             EngineRegistry.FindPdfMerger(sp.GetRequiredService<IReadOnlyList<IConverter>>()),
             sp.GetRequiredService<ILogger<JobQueue>>(),
             EngineRegistry.FindFileCombiner(sp.GetRequiredService<IReadOnlyList<IConverter>>()),
-            EngineRegistry.FindTiffMerger(sp.GetRequiredService<IReadOnlyList<IConverter>>())));
+            EngineRegistry.FindTiffMerger(sp.GetRequiredService<IReadOnlyList<IConverter>>()),
+            EngineRegistry.FindOfficeMerger(sp.GetRequiredService<IReadOnlyList<IConverter>>())));
 
         services.AddSingleton<EngineDownloadService>();
         services.AddSingleton<PresetAvailability>();

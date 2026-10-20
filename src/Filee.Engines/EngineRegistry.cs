@@ -73,6 +73,10 @@ public static class EngineRegistry
     public static IPdfMerger? FindPdfMerger(IEnumerable<IConverter> converters) =>
         converters.OfType<IPdfMerger>().FirstOrDefault();
 
+    /// <summary>Finds the engine that merges Word or PowerPoint files into one.</summary>
+    public static IOfficeMerger? FindOfficeMerger(IEnumerable<IConverter> converters) =>
+        converters.OfType<IOfficeMerger>().FirstOrDefault();
+
     /// <summary>Finds the engine that writes several pages into one multi-page TIFF.</summary>
     public static ITiffMerger? FindTiffMerger(IEnumerable<IConverter> converters) =>
         converters.OfType<ITiffMerger>().FirstOrDefault();

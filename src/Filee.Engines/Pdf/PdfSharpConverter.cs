@@ -114,17 +114,21 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
 
         if (step.Preset.Pdf.SplitPages)
         {
-            for (var i = 0; i < pages.Count; i++)
+            var parts = SplitParts(step.Preset.Pdf.SplitParts, pages, source.PageCount);
+            for (var i = 0; i < parts.Count; i++)
             {
                 ct.ThrowIfCancellationRequested();
-                using var single = new PdfDocument();
-                single.AddPage(source.Pages[pages[i]]);
-                var path = step.Output.Allocate("pdf", $"_p{pages[i] + 1}");
+                using var part = new PdfDocument();
+                foreach (var index in parts[i])
+                    part.AddPage(source.Pages[index]);
+                var first = parts[i][0] + 1;
+                var last = parts[i][^1] + 1;
+                var path = step.Output.Allocate("pdf", first == last ? $"_p{first}" : $"_p{first}-{last}");
                 if (path is null)
                     continue;
-                single.Save(path);
+                part.Save(path);
                 written.Add(path);
-                progress?.Report((i + 1.0) / pages.Count);
+                progress?.Report((i + 1.0) / parts.Count);
             }
             return written;
         }
@@ -138,6 +142,18 @@ public sealed class PdfSharpConverter : IConverter, IPdfMerger, IImageTransforme
         extract.Save(output);
         return [output];
     }
+
+    /// <summary>
+    /// The page groups a split writes: each comma-separated part of <paramref name="expression"/> ("1-3, 4-8, 9-"), or
+    /// every page of <paramref name="pages"/> on its own when there are no parts.
+    /// </summary>
+    internal static List<IReadOnlyList<int>> SplitParts(string expression, IReadOnlyList<int> pages, int pageCount) =>
+        string.IsNullOrWhiteSpace(expression)
+            ? pages.Select(p => (IReadOnlyList<int>)[p]).ToList()
+            : expression.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(part => PageRange.Parse(part, pageCount))
+                .Where(part => part.Count > 0)
+                .ToList();
 
     /// <summary>
     /// PDF → a smaller PDF (<see cref="PdfOptions.Compression"/>), also with a page range or one file per page: the whole

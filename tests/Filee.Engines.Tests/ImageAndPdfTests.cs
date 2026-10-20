@@ -373,4 +373,23 @@ public class ImageAndPdfTests(EngineFixture fx) : IClassFixture<EngineFixture>
         AssertDone(job);
         Assert.Equal(["pages_p2.pdf", "pages_p3.pdf"], job.Outputs.Select(Path.GetFileName).Order(StringComparer.Ordinal));
     }
+
+    [Fact]
+    public async Task Split_pdf_into_chosen_parts()
+    {
+        var dir = fx.NewFolder();
+        var pdf = (await fx.ConvertAsync([EngineFixture.MakeMultiPageTiff(dir, 5)], new Preset { TargetFormat = "pdf" })).Outputs.Single();
+
+        var job = await fx.ConvertAsync([pdf], new Preset
+        {
+            TargetFormat = "pdf",
+            Pdf = { SplitPages = true, SplitParts = "1-2, 3, 4-" },
+            Output = { Location = OutputLocation.Subfolder, SubfolderName = "{name}" },
+        });
+
+        AssertDone(job);
+        Assert.Equal(["pages_p1-2.pdf", "pages_p3.pdf", "pages_p4-5.pdf"], job.Outputs.Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        using var last = PdfReader.Open(job.Outputs.Single(o => o.EndsWith("_p4-5.pdf")), PdfDocumentOpenMode.Import);
+        Assert.Equal(2, last.PageCount);
+    }
 }

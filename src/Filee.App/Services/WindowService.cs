@@ -250,7 +250,16 @@ public sealed class WindowService(ILocalizer loc, IServiceProvider services, Mem
         services.GetRequiredService<UpdateService>().OpenDownloadPage();
     }
 
-    private async Task<bool> ShowMessageAsync(Window? owner, string message, bool destructive, bool withCancel)
+    /// <summary>"Split into which parts?" before a PDF split. Returns the parts typed ("" = every page), or null when cancelled.</summary>
+    public async Task<string?> AskSplitPartsAsync(Window? owner)
+    {
+        var input = new TextBox { PlaceholderText = loc["split.parts_hint"] };
+        return await ShowMessageAsync(owner, loc["split.parts_question"], destructive: false, withCancel: true, input)
+            ? input.Text?.Trim() ?? ""
+            : null;
+    }
+
+    private async Task<bool> ShowMessageAsync(Window? owner, string message, bool destructive, bool withCancel, TextBox? input = null)
     {
         var dialog = new Window
         {
@@ -276,6 +285,7 @@ public sealed class WindowService(ILocalizer loc, IServiceProvider services, Mem
             Children =
             {
                 new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+                input ?? new Control { IsVisible = false },
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,

@@ -411,6 +411,29 @@ public class DonutGroupTests
     }
 
     [AvaloniaFact]
+    public void Merge_is_offered_only_for_two_or_more_files()
+    {
+        TestServices.EnsureInitialized("en");
+        var vm = AppHost.Get<RadialViewModel>();
+
+        vm.Load([@"C:\docs\a.pdf"], clickMode: true);
+        Assert.DoesNotContain(vm.Presets, p => p.Id == "merge-pdf");
+        vm.Load([@"C:\docs\a.pdf", @"C:\docs\b.pdf"], clickMode: true);
+        Assert.Contains(vm.Presets, p => p.Id == "merge-pdf");
+    }
+
+    [AvaloniaFact]
+    public void Converting_into_the_files_own_format_is_left_out()
+    {
+        TestServices.EnsureInitialized("en");
+        var vm = AppHost.Get<RadialViewModel>();
+
+        vm.Load([@"C:\docs\a.docx"], clickMode: true);
+        Assert.DoesNotContain(vm.Presets, p => p.Id == "to-docx");
+        Assert.Contains(vm.Presets, p => p.Id == "to-pdf");
+    }
+
+    [AvaloniaFact]
     public void Rotate_is_offered_for_images_and_says_why_not_for_a_PDF()
     {
         TestServices.EnsureInitialized("en");

@@ -563,6 +563,39 @@ internal static class SettingsMigrations
         //      takes it. Other extensions the user removed from a built-in donut stay removed.
         if (from < 22)
             changed |= LearnExtensions(profiles, out _, ["fbx"]);
+        // v23: ODT leaves the documents donut (DOCX covers it). The preset stays for anyone who adds it back.
+        if (from < 23 && profiles.FirstOrDefault(p => p.Id == "office") is { } documents)
+            changed |= documents.PresetIds.Remove("to-odt");
+        // v24: merge Word or PowerPoint files into one, after "Merge PDF" on the documents and presentations donuts.
+        if (from < 24)
+        {
+            foreach (var preset in BuiltInData.OfficeMergePresets().Where(p => presets.All(existing => existing.Id != p.Id)))
+            {
+                presets.Add(preset);
+                changed = true;
+            }
+            changed |= Offer(presets, profiles, "office", "merge-docx", "merge-pdf");
+            changed |= Offer(presets, profiles, "presentations", "merge-pptx", "merge-pdf");
+        }
+        // v25: HWP and HWPX (Hancom Office, used almost only in Korea) leave every donut. The presets stay, and HWP
+        //      files still open.
+        if (from < 25)
+            foreach (var profile in profiles)
+                changed |= profile.PresetIds.RemoveAll(id => id is "to-hwpx" or "to-hwp") > 0;
+        // v26: TIFF, BMP and ICO (niche targets) leave the images donut; the presets stay.
+        if (from < 26 && profiles.FirstOrDefault(p => p.Id == "images") is { } images)
+            changed |= images.PresetIds.RemoveAll(id => id is "to-tiff" or "to-bmp" or "to-ico") > 0;
+        // v27: "Compress" on the images donut and "Compress PDF" on the PDF donut, at the end.
+        if (from < 27)
+        {
+            foreach (var preset in BuiltInData.CreatePresets().Where(p => p.Id is "compress-image" or "compress-pdf" && presets.All(existing => existing.Id != p.Id)))
+            {
+                presets.Add(preset);
+                changed = true;
+            }
+            changed |= Offer(presets, profiles, "images", "compress-image", null);
+            changed |= Offer(presets, profiles, "pdf", "compress-pdf", null);
+        }
         return changed;
     }
 

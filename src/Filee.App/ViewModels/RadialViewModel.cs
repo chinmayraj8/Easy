@@ -102,14 +102,20 @@ public sealed partial class RadialViewModel(UserDataStore store, ILocalizer loc,
 
         var profile = ProfileSelector.Select(store.Profiles, files);
         var formats = ProfileSelector.DetectFormats(files);
+        // Merging needs two or more files (a folder may hold several).
+        var canMerge = files.Count > 1 || files.Any(Directory.Exists);
+        // A slice that would only convert the files into their own format (DOCX → DOCX) is left out, not greyed.
+        bool Shown(Preset p) => (canMerge || !p.Pdf.MergeIntoSingle)
+            && !(formats.Count > 0 && formats.All(f => f.Id == p.TargetFormat) && availability.Check(p, formats) is not null);
         Presets = (profile?.PresetIds ?? [])
             .Select(store.FindPreset)
             .OfType<Preset>()
+            .Where(Shown)
             .ToList();
 
         _subPresets = Presets
             .Select(p => (IReadOnlyList<Preset>)(p.IsGroup ? p.SubPresetIds : [])
-                .Select(store.FindPreset).OfType<Preset>().Where(c => !c.IsGroup).Take(Preset.MaxSubPresets).ToList())
+                .Select(store.FindPreset).OfType<Preset>().Where(c => !c.IsGroup && Shown(c)).Take(Preset.MaxSubPresets).ToList())
             .ToList();
 
         DonutItem ItemOf(Preset p, bool caption = true)

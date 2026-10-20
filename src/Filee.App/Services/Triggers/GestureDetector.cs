@@ -5,8 +5,8 @@
 //                →  button up  →  DragEnded
 // Hold gesture:  button down with modifiers  →  (armed)  →  HoldElapsed without moving  →  HoldTriggered
 // Key chord:     key down with the exact modifiers  →  KeyChordTriggered at the last known cursor position
-// Tapped modifier: modifiers pressed and released alone  →  the next plain button press within LatchMilliseconds
-//                counts as if they were still held (tap Option, let go, then drag)
+// Tapped modifier: a drag gesture's modifiers pressed and released alone  →  KeyChordTriggered at the cursor, which
+//                opens the donut for the file manager's selection (tap Option, then click a format)
 
 using Filee.Core.Settings;
 
@@ -22,11 +22,6 @@ public sealed class GestureDetector
     private bool _lateRejected; // scope check failed for this drag; don't re-check on every move
     private int _lastX, _lastY;
     private ModifierKeys _tapping; // modifiers pressed since the last other key or button
-    private ModifierKeys _latched;
-    private long _latchedAt;
-
-    /// <summary>How long a tapped modifier stays armed for the next button press.</summary>
-    public const int LatchMilliseconds = 3000;
 
     private sealed record Armed(TriggerGesture Gesture, TriggerMouseButton Button, int X, int Y, long Token);
 
@@ -70,9 +65,6 @@ public sealed class GestureDetector
             _armed = null;
             _lateRejected = false;
             _tapping = ModifierKeys.None;
-            if (modifiers == ModifierKeys.None && Environment.TickCount64 - _latchedAt <= LatchMilliseconds)
-                modifiers = _latched;
-            _latched = ModifierKeys.None;
             if (Paused)
                 return;
 
@@ -201,17 +193,25 @@ public sealed class GestureDetector
             KeyChordTriggered?.Invoke(fire, x, y);
     }
 
-    /// <summary>A key went up. Releasing a modifier that was tapped alone latches it for the next button press.</summary>
+    /// <summary>A key went up. Releasing a drag gesture's modifiers that were tapped alone opens the donut.</summary>
     public void KeyUp(string key)
     {
+        TriggerGesture? fire = null;
+        int x, y;
         lock (_lock)
         {
             if (ModifierOf(key) == ModifierKeys.None || _tapping == ModifierKeys.None)
                 return;
-            _latched = _tapping;
-            _latchedAt = Environment.TickCount64;
+            var tapped = _tapping;
             _tapping = ModifierKeys.None;
+            (x, y) = (_lastX, _lastY);
+            if (!Paused)
+                fire = _gestures.FirstOrDefault(g => g.Kind == TriggerKind.Drag && g.Modifiers == tapped);
+            if (fire is not null && !ScopeFilter(fire, x, y))
+                fire = null;
         }
+        if (fire is not null)
+            KeyChordTriggered?.Invoke(fire, x, y);
     }
 
     /// <summary>"LeftAlt" → Alt; None for keys that are not modifiers.</summary>

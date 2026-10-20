@@ -322,7 +322,10 @@ public class UserDataStoreTests
         Assert.NotNull(presets.SingleOrDefault(p => p.Id == "to-hwp"));
         foreach (var expected in BuiltInData.CreateProfiles())
             Assert.Equal(expected.PresetIds, profiles.Single(p => p.Id == expected.Id).PresetIds);
-        Assert.False(SettingsMigrations.ApplyToLibrary(6, presets, profiles)); // once only
+        // Again: HWP is offered by v7 and taken off by v25, so the donuts end the same.
+        SettingsMigrations.ApplyToLibrary(6, presets, profiles);
+        foreach (var expected in BuiltInData.CreateProfiles())
+            Assert.Equal(expected.PresetIds, profiles.Single(p => p.Id == expected.Id).PresetIds);
     }
 
     [Fact]
@@ -803,7 +806,7 @@ public class UserDataStoreTests
     }
 
     [Fact]
-    public void Version_17_libraries_get_compress_pdf_after_split_pdf_on_no_donut()
+    public void Version_17_libraries_get_compress_pdf_after_split_pdf_and_on_the_pdf_donut()
     {
         var presets = BuiltInData.CreatePresets();
         presets.RemoveAll(p => p.Id == "compress-pdf");
@@ -814,7 +817,7 @@ public class UserDataStoreTests
         var compress = presets.Single(p => p.Id == "compress-pdf");
         Assert.Equal(("pdf", PdfCompression.Ebook, false), (compress.TargetFormat, compress.Pdf.Compression, compress.Pdf.CompressWithGhostscript));
         Assert.Equal("pdf-split", presets[presets.IndexOf(compress) - 1].Id); // where a new library has it
-        Assert.DoesNotContain(profiles, p => p.PresetIds.Contains("compress-pdf"));
+        Assert.Equal("compress-pdf", profiles.Single(p => p.Id == "pdf").PresetIds[^1]); // v27
         Assert.Equal(BuiltInData.CreateProfiles().Single(p => p.Id == "pdf").PresetIds, profiles.Single(p => p.Id == "pdf").PresetIds);
         Assert.False(SettingsMigrations.ApplyToLibrary(17, presets, profiles)); // once only
     }

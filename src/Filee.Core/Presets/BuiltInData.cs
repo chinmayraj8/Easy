@@ -35,6 +35,13 @@ public static class BuiltInData
         },
         new()
         {
+            // Same format, JPEG / WebP / AVIF at 75 (never above the photo's own JPEG quality), metadata dropped (the colour
+            // profile stays). ponytail: PNG is only recompressed losslessly; quantize to a palette if PNGs must shrink more.
+            Id = "compress-image", NameKey = "preset.compress_image", TargetFormat = SameAsSource,
+            Image = { Quality = 75, KeepMetadata = false }, Output = { FileNamePattern = "{name}_compressed" },
+        },
+        new()
+        {
             Id = "grayscale", NameKey = "preset.grayscale", TargetFormat = SameAsSource,
             Image = { Grayscale = true }, Output = { FileNamePattern = "{name}_gray" },
         },
@@ -55,6 +62,7 @@ public static class BuiltInData
             Id = "merge-pdf", NameKey = "preset.merge_pdf", TargetFormat = "pdf",
             Pdf = { MergeIntoSingle = true }, Output = { FileNamePattern = "{name}_merged" },
         },
+        .. OfficeMergePresets(),
         new()
         {
             Id = "pdf-long-image", NameKey = "preset.long_image", TargetFormat = "png",
@@ -85,8 +93,8 @@ public static class BuiltInData
     ];
 
     /// <summary>
-    /// "Compress PDF": pictures at 150 dpi, the rest compressed losslessly (added in settings schema 20). On no default
-    /// donut, the PDF donut is full: users add it in Settings → Toolbar.
+    /// "Compress PDF": pictures at 150 dpi, the rest compressed losslessly (added in settings schema 20, on the PDF donut
+    /// since schema 27).
     /// </summary>
     public static List<Preset> PdfCompressionPresets() =>
     [
@@ -318,7 +326,7 @@ public static class BuiltInData
         {
             Id = "images", NameKey = "profile.images",
             Extensions = ExtensionsOf(FormatCategory.Image),
-            PresetIds = ["to-png", "to-jpg", "to-webp", "to-pdf", "trace-svg", "trace-line-art", "to-tiff", "to-bmp", "to-ico", "half-size"],
+            PresetIds = ["to-png", "to-jpg", "to-webp", "to-pdf", "trace-svg", "trace-line-art", "half-size", "compress-image"],
         },
         new()
         {
@@ -330,7 +338,7 @@ public static class BuiltInData
         {
             Id = "office", NameKey = "profile.office",
             Extensions = ExtensionsOf(FormatCategory.Document),
-            PresetIds = ["to-pdf", "to-hwpx", "to-hwp", "to-docx", "to-odt", "to-txt", "to-html", "to-epub", "to-png", "merge-pdf"],
+            PresetIds = ["to-pdf", "to-docx", "to-txt", "to-html", "to-epub", "to-png", "merge-pdf", "merge-docx"],
         },
         SpreadsheetProfile(),
         PresentationProfile(),
@@ -338,7 +346,7 @@ public static class BuiltInData
         {
             Id = "hwp", NameKey = "profile.hwp",
             Extensions = ["hwp", "hwpx"],
-            PresetIds = ["to-pdf", "to-docx", "to-hwpx", "to-hwp", "to-png", "to-jpg", "to-txt", "to-md", "to-epub", "merge-pdf"],
+            PresetIds = ["to-pdf", "to-docx", "to-png", "to-jpg", "to-txt", "to-md", "to-epub", "merge-pdf"],
         },
         TextProfile(),
         .. WithSubtitleProfile(CatalogProfiles()),
@@ -356,7 +364,7 @@ public static class BuiltInData
     /// stays a preset to add in Settings → Toolbar.
     /// </summary>
     public static readonly IReadOnlyList<string> PdfDonut =
-        ["to-png", "to-jpg", "pdf-long-image", "to-docx", "pdf-slides", "to-txt", "to-md", "to-epub", "to-hwpx", "to-hwp", "pdf-split", "merge-pdf"];
+        ["to-png", "to-jpg", "pdf-long-image", "to-docx", "pdf-slides", "to-txt", "to-md", "to-epub", "pdf-split", "merge-pdf", "compress-pdf"];
 
     /// <summary>The PDF donut of settings schema 9 to 17, which schema 18 replaces when the user never changed it.</summary>
     public static readonly IReadOnlyList<string> PdfDonutBefore18 =
@@ -368,8 +376,23 @@ public static class BuiltInData
         Id = "spreadsheets",
         NameKey = "profile.spreadsheets",
         Extensions = ExtensionsOf(FormatCategory.Spreadsheet),
-        PresetIds = ["to-pdf", "to-xlsx", "to-csv", "to-json", "to-ods", "to-hwpx", "to-hwp", "to-html", "merge-pdf"],
+        PresetIds = ["to-pdf", "to-xlsx", "to-csv", "to-json", "to-ods", "to-html", "merge-pdf"],
     };
+
+    /// <summary>Merge Word or PowerPoint files into one (added in settings schema 24, see SettingsMigrations).</summary>
+    public static IEnumerable<Preset> OfficeMergePresets() =>
+    [
+        new()
+        {
+            Id = "merge-docx", NameKey = "preset.merge_docx", TargetFormat = "docx",
+            Pdf = { MergeIntoSingle = true }, Output = { FileNamePattern = "{name}_merged" },
+        },
+        new()
+        {
+            Id = "merge-pptx", NameKey = "preset.merge_pptx", TargetFormat = "pptx",
+            Pdf = { MergeIntoSingle = true }, Output = { FileNamePattern = "{name}_merged" },
+        },
+    ];
 
     /// <summary>PowerPoint and OpenDocument slides (split from "office" in settings schema 5).</summary>
     public static ToolbarProfile PresentationProfile() => new()
@@ -377,7 +400,7 @@ public static class BuiltInData
         Id = "presentations",
         NameKey = "profile.presentations",
         Extensions = ExtensionsOf(FormatCategory.Presentation),
-        PresetIds = ["to-pdf", "to-png", "to-jpg", "to-pptx", "to-hwpx", "to-hwp", "merge-pdf"],
+        PresetIds = ["to-pdf", "to-png", "to-jpg", "to-pptx", "merge-pdf", "merge-pptx"],
     };
 
     /// <summary>Markdown, plain text and HTML (added in settings schema 4, see SettingsMigrations).</summary>
@@ -386,7 +409,7 @@ public static class BuiltInData
         Id = "text",
         NameKey = "profile.text",
         Extensions = ExtensionsOf(FormatCategory.Text),
-        PresetIds = ["to-pdf", "to-hwpx", "to-hwp", "to-docx", "to-html", "to-txt", "to-epub"],
+        PresetIds = ["to-pdf", "to-docx", "to-html", "to-txt", "to-epub"],
     };
 
     /// <summary>Donuts of the categories added in settings schema 6, in the order they follow "text".</summary>
@@ -396,7 +419,7 @@ public static class BuiltInData
         {
             Id = "ebooks", NameKey = "profile.ebooks",
             Extensions = ExtensionsOf(FormatCategory.Ebook),
-            PresetIds = ["to-pdf", "to-epub", "to-docx", "to-txt", "to-azw3", "to-mobi", "to-kepub", "to-hwpx", "to-hwp", "to-html"],
+            PresetIds = ["to-pdf", "to-epub", "to-docx", "to-txt", "to-azw3", "to-mobi", "to-kepub", "to-html"],
         },
         new()
         {
