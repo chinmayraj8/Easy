@@ -17,6 +17,7 @@ public sealed class MacOSNativeTests
         _ = platform.HasAccessibilityPermission;
         _ = platform.PrefersReducedMotion;
         _ = platform.ProcessNameAt(0, 0);
+        _ = ScreenLock.IsLocked; // loads CoreGraphics' session flag
         Assert.Equal(4, platform.SystemDragThreshold);
     }
 

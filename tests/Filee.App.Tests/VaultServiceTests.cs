@@ -287,6 +287,46 @@ public class VaultServiceTests
     }
 
     [Fact]
+    public async Task It_locks_when_the_screen_locks_or_the_mac_slept_and_not_otherwise()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Skip("Needs hdiutil.");
+            return;
+        }
+        var folder = Directory.CreateTempSubdirectory("easy-vault").FullName;
+        var vault = new VaultService(new UserDataStore(Path.Combine(folder, "data")), NullLogger<VaultService>.Instance);
+        var locked = false;
+        var now = new DateTime(2026, 10, 20, 12, 0, 0, DateTimeKind.Utc);
+        vault.ScreenLocked = () => locked;
+        vault.Clock = () => now;
+        try
+        {
+            Assert.Null(await vault.CreateAsync("correct horse"));
+
+            now += TimeSpan.FromSeconds(2); // an ordinary check: stays open
+            await vault.GuardAsync();
+            Assert.True(vault.IsOpen);
+
+            locked = true; // ⌃⌘Q, or the screen saver asked for the password
+            now += TimeSpan.FromSeconds(2);
+            await vault.GuardAsync();
+            Assert.False(vault.IsOpen);
+
+            locked = false;
+            Assert.Null(await vault.UnlockAsync("correct horse"));
+            now += TimeSpan.FromMinutes(45); // the lid was closed: no check ran while the Mac slept
+            await vault.GuardAsync();
+            Assert.False(vault.IsOpen);
+        }
+        finally
+        {
+            await vault.LockAsync();
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Five_rounds_of_hiding_and_unhiding_bring_every_byte_back()
     {
         if (!OperatingSystem.IsMacOS())

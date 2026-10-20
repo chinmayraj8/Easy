@@ -2,7 +2,9 @@
 // folder. Locked, it is one bundle of encrypted bands that nothing reads without the password; "Hide" moves files into
 // it, the tray opens it in Finder and locks it again. Easy never stores the password, so a forgotten one can't be
 // recovered. Open, it is mounted inside the data folder with -nobrowse: on no Finder sidebar or desktop. Shown in
-// Finder, it locks again once no Finder window shows it (checked every 2 s; Finder sends no "window closed").
+// Finder, it locks again once no Finder window shows it (checked every 2 s; Finder sends no "window closed"). Open, it
+// also locks the moment the screen locks or the Mac wakes from sleep (checked every 2 s; a check that comes much later
+// than due means the Mac slept in between).
 
 using System.Diagnostics;
 using Filee.Core.Settings;
@@ -19,6 +21,9 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
     // hidden, or the next one would be copied into the bare mount folder, unencrypted.
     private readonly SemaphoreSlim _gate = new(1, 1);
     private Timer? _autoLock;
+    private Timer? _guard;
+    private DateTime _lastGuard;
+    private bool _lockDue; // the screen locked or the Mac slept: keep trying until a file still open in an app lets go
     private Timer? _finderWatch;
     private bool _seenInFinder;
     private int _watchTicks;
@@ -33,6 +38,18 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
     public bool IsOpen => File.Exists(Path.Combine(MountPoint, ".easy-vault"));
 
     public event EventHandler? StateChanged;
+
+    /// <summary>Whether the screen is locked (tests set their own).</summary>
+    internal Func<bool> ScreenLocked { get; set; } = () => Platform.MacOS.ScreenLock.IsLocked;
+
+    /// <summary>
+    /// The wall clock: it keeps going while the Mac sleeps, so a guard check long overdue means it slept (tests set
+    /// their own).
+    /// </summary>
+    internal Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
+
+    /// <summary>Checks that far apart: the Mac slept (or was suspended) in between.</summary>
+    private static readonly TimeSpan SleptGap = TimeSpan.FromSeconds(30);
 
     /// <summary>Makes the vault with <paramref name="password"/>. Returns an error message, or null.</summary>
     public Task<string?> CreateAsync(string password) => Gated(() => CreateCoreAsync(password));
@@ -64,6 +81,10 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
             return output;
         _autoLock?.Dispose();
         _autoLock = new Timer(_ => _ = LockAsync(), null, AutoLock, AutoLock);
+        _lockDue = false;
+        _lastGuard = Clock();
+        _guard?.Dispose();
+        _guard = new Timer(_ => _ = GuardAsync(), null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
         StateChanged?.Invoke(this, EventArgs.Empty);
         return null;
     }
@@ -85,8 +106,33 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
         _autoLock = null;
         _finderWatch?.Dispose();
         _finderWatch = null;
+        _guard?.Dispose();
+        _guard = null;
+        _lockDue = false;
         StateChanged?.Invoke(this, EventArgs.Empty);
         return true;
+    }
+
+    /// <summary>
+    /// Every 2 s while open: locks once the screen is locked, or when this check comes far later than due (the Mac
+    /// slept). A file still open in another app keeps it open; it is tried again on each check until it locks, never
+    /// forced (forcing could lose that app's unsaved changes).
+    /// </summary>
+    internal async Task GuardAsync()
+    {
+        var now = Clock();
+        var slept = now - _lastGuard > SleptGap;
+        _lastGuard = now;
+        if (!IsOpen)
+            return;
+        if (slept || ScreenLocked())
+        {
+            if (!_lockDue)
+                log.LogInformation(slept ? "The Mac slept: locking the hidden files" : "The screen locked: locking the hidden files");
+            _lockDue = true;
+        }
+        if (_lockDue)
+            await LockAsync();
     }
 
     /// <summary>
@@ -379,6 +425,7 @@ public sealed class VaultService(UserDataStore store, ILogger<VaultService> log)
     {
         _autoLock?.Dispose();
         _finderWatch?.Dispose();
+        _guard?.Dispose();
         // Quitting locks it, after a move under way: a file still open in another app keeps it open until that app
         // closes it.
         var gated = _gate.Wait(TimeSpan.FromMinutes(2));
