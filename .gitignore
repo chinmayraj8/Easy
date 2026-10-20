@@ -30,3 +30,6 @@ Thumbs.db
 # Fonts are downloaded by build/fetch-fonts.ps1
 src/Filee.App/Assets/Fonts/*.ttf
 src/Filee.App/Assets/Fonts/*.otf
+
+# graphify knowledge graph (rebuilt locally by its git hooks)
+graphify-out/
