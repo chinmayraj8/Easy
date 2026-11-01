@@ -298,13 +298,22 @@ internal static partial class PdfLayoutDocx
             .Select(text => new[] { text.FirstOrDefault(), text.LastOrDefault() }.OfType<Row>().Where(NearEdge).Distinct().ToList()).ToList();
         var recurring = edgeRows.SelectMany(c => c.Select(Running).Distinct()).GroupBy(k => k)
             .Where(g => g.Key.Any(char.IsLetter) && g.Count() >= Math.Max(2, 0.25 * rows.Count)).Select(g => g.Key).ToHashSet();
+        // Only numbers changing is a running line when it is no taller than the body text: "Section 1 Results",
+        // "Section 2 Results" in a heading's size at the top of each page are headings. They left the body for one
+        // header that showed "Section <page> Results" on every page. The same words on several pages are running
+        // text at any size (a letterhead).
+        var exactly = edgeRows.SelectMany(c => c.Select(r => r.Text.Trim()).Distinct()).GroupBy(k => k)
+            .Where(g => g.Count() >= Math.Max(2, 0.25 * rows.Count)).Select(g => g.Key).ToHashSet();
+        var bodyHeight = rows.SelectMany(r => r).Where(r => r.Kind == Kind.Text && !r.Flowing).Select(r => Math.Round(r.Height * 2) / 2)
+            .GroupBy(h => h).OrderByDescending(g => g.Count()).Select(g => g.Key).DefaultIfEmpty(double.MaxValue).First();
+        bool RunningLine(Row row) => recurring.Contains(Running(row)) && (row.Height <= bodyHeight * 1.15 || exactly.Contains(row.Text.Trim()));
         // A page may have both: a running header and a running footer.
         var heads = new Dictionary<int, (Row Row, bool Top)>();
         var foots = new Dictionary<int, (Row Row, bool Top)>();
         for (var p = 0; p < rows.Count; p++)
             foreach (var candidate in edgeRows[p])
                 if (PageNumber().IsMatch(candidate.Text.Trim()) && int.Parse(candidate.Text.Trim(), System.Globalization.CultureInfo.InvariantCulture) == p + 1
-                    || recurring.Contains(Running(candidate)))
+                    || RunningLine(candidate))
                 {
                     var atTop = candidate.Top < pageHeight * 0.2;
                     if ((atTop ? heads : foots).ContainsKey(p))

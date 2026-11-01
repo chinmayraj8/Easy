@@ -213,4 +213,28 @@ public class PdfLayoutDocxTests
         var jc = document.Root!.Element(W + "body")!.Elements(W + "p").First().Element(W + "pPr")!.Element(W + "jc")!;
         Assert.Equal("center", jc.Attribute(W + "val")!.Value);
     }
+
+    [Fact]
+    public void Numbered_headings_at_the_top_of_each_page_stay_headings()
+    {
+        // Easy: "Section 1 Results", "Section 2 Results" (18 pt) at the top of every page recurred with their digits
+        // masked and became one header reading "Section <page> Results"; a 9 pt running line with the same words stays
+        // a header.
+        string[] Page(int n) =>
+        [
+            Box(Left, 40, 80, "Quarterly Review", 10.3),
+            Box(Left, 120, 200, $"Section {n} Results", 20.7),
+            Box(Left, 160, 357.4, "Body text that fills the line of the page from margin to margin, then"),
+            Box(Left, 171.5, 100, "ends."),
+        ];
+        var document = Document(("", Page(1)), ("", Page(2)), ("", Page(3)));
+
+        var parts = Rebuild(document);
+
+        var body = Paragraphs(document);
+        Assert.Equal(["Section 1 Results", "Section 2 Results", "Section 3 Results"], body.Where(p => p.StartsWith("Section", StringComparison.Ordinal)));
+        Assert.DoesNotContain(body, p => p.Contains("Quarterly", StringComparison.Ordinal));
+        Assert.Contains(parts, p => Text(p.Content).Contains("Quarterly Review", StringComparison.Ordinal));
+        Assert.DoesNotContain(parts, p => Text(p.Content).Contains("Section", StringComparison.Ordinal));
+    }
 }
