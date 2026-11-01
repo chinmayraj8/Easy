@@ -184,10 +184,9 @@ public sealed class JobQueue : IAsyncDisposable
             return;
         }
 
-        if (format == "pdf")
-            await _pdfMerger!.MergeAsync(inputs, output, job.CancellationToken);
-        else
-            await _officeMerger!.MergeAsync(inputs, output, format, job.CancellationToken);
+        await Completely(allocator, () => format == "pdf"
+            ? _pdfMerger!.MergeAsync(inputs, output, job.CancellationToken)
+            : _officeMerger!.MergeAsync(inputs, output, format, job.CancellationToken));
         first.Outputs.Add(output);
         foreach (var f in job.Files.Where(f => f.State != FileState.Failed))
         {
@@ -221,14 +220,15 @@ public sealed class JobQueue : IAsyncDisposable
             return;
 
         var first = job.Files[0];
-        var output = CreateFinalAllocator(job, first.SourcePath, 1).Allocate("tiff");
+        var allocator = CreateFinalAllocator(job, first.SourcePath, 1);
+        var output = allocator.Allocate("tiff");
         if (output is null)
         {
             foreach (var f in job.Files) f.State = FileState.Skipped;
             return;
         }
 
-        await _tiffMerger!.MergeAsync(inputs, output, job.Preset.Image, job.CancellationToken);
+        await Completely(allocator, () => _tiffMerger!.MergeAsync(inputs, output, job.Preset.Image, job.CancellationToken));
         first.Outputs.Add(output);
         foreach (var f in job.Files.Where(f => f.State != FileState.Failed))
         {
@@ -270,7 +270,8 @@ public sealed class JobQueue : IAsyncDisposable
             return;
         }
 
-        var output = CreateFinalAllocator(job, inputs[0].SourcePath, 1).Allocate(format.PrimaryExtension);
+        var allocator = CreateFinalAllocator(job, inputs[0].SourcePath, 1);
+        var output = allocator.Allocate(format.PrimaryExtension);
         if (output is null)
         {
             foreach (var f in inputs)
@@ -298,8 +299,8 @@ public sealed class JobQueue : IAsyncDisposable
 
         try
         {
-            await _combiner!.CombineAsync(inputs.Select(f => f.SourcePath).ToList(), output, format.Id, job.Preset,
-                workDir, progress, job.CancellationToken);
+            await Completely(allocator, () => _combiner!.CombineAsync(inputs.Select(f => f.SourcePath).ToList(), output, format.Id,
+                job.Preset, workDir, progress, job.CancellationToken));
             inputs[0].Outputs.Add(output);
             foreach (var f in inputs)
             {
@@ -408,6 +409,7 @@ public sealed class JobQueue : IAsyncDisposable
         file.State = FileState.Running;
         Notify(job);
 
+        FinalAllocator? final = null;
         try
         {
             IReadOnlyList<string> inputs = [file.SourcePath];
@@ -416,7 +418,7 @@ public sealed class JobQueue : IAsyncDisposable
                 var step = route.Steps[s];
                 var isLast = s == route.Steps.Count - 1;
                 IOutputAllocator allocator = isLast && finalOutput
-                    ? CreateFinalAllocator(job, file.SourcePath, index)
+                    ? final = CreateFinalAllocator(job, file.SourcePath, index)
                     : new TempAllocator(workDir, FormatRegistry.NameWithoutExtension(file.SourcePath));
 
                 var outputs = new List<string>();
@@ -457,6 +459,7 @@ public sealed class JobQueue : IAsyncDisposable
                 inputs = outputs;
             }
 
+            final?.Commit();
             if (finalOutput)
             {
                 file.Outputs.AddRange(inputs);
@@ -470,17 +473,20 @@ public sealed class JobQueue : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
+            final?.Discard();
             file.State = FileState.Cancelled;
             Notify(job);
             return [];
         }
         catch (ConversionRefusedException ex)
         {
+            final?.Discard();
             _log.LogInformation("Converting {File} was refused: {Reason}", file.SourcePath, ex.Message);
             return Fail(file, ex.ErrorKey, ex.Detail);
         }
         catch (Exception ex)
         {
+            final?.Discard();
             _log.LogWarning(ex, "Converting {File} failed", file.SourcePath);
             return Fail(file, "error.conversion_failed", ex.Message);
         }
@@ -539,14 +545,25 @@ public sealed class JobQueue : IAsyncDisposable
         if (bestSize > limit)
             file.NoticeKey = "notice.size_not_reached";
 
-        var output = CreateFinalAllocator(job, file.SourcePath, index).Allocate(Path.GetExtension(best).TrimStart('.'));
+        var allocator = CreateFinalAllocator(job, file.SourcePath, index);
+        var output = allocator.Allocate(Path.GetExtension(best).TrimStart('.'));
         if (output is null)
         {
             file.State = FileState.Skipped;
             Notify(job);
             return;
         }
-        File.Move(best, output, overwrite: true);
+        try
+        {
+            File.Move(best, output, overwrite: true);
+            allocator.Commit();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            allocator.Discard();
+            FailFile(job, file, "error.conversion_failed", ex.Message);
+            return;
+        }
         file.Outputs.Add(output);
         if (job.Preset.Output.KeepDates)
             CopyDates(file.SourcePath, [output]);
@@ -591,6 +608,21 @@ public sealed class JobQueue : IAsyncDisposable
             var max = converter.MaxParallelism <= 0 ? Environment.ProcessorCount : converter.MaxParallelism;
             return new SemaphoreSlim(max, max);
         });
+
+    /// <summary>Runs a step that writes into <paramref name="allocator"/>'s paths: kept when it ends, taken back when it throws.</summary>
+    private static async Task Completely(FinalAllocator allocator, Func<Task> write)
+    {
+        try
+        {
+            await write();
+        }
+        catch
+        {
+            allocator.Discard();
+            throw;
+        }
+        allocator.Commit();
+    }
 
     private FinalAllocator CreateFinalAllocator(ConversionJob job, string sourcePath, int index) =>
         new(this, job.Preset.Output, new OutputPathResolver.Tokens(sourcePath, job.PresetDisplayName, index, job.CreatedAt));
@@ -646,9 +678,16 @@ public sealed class JobQueue : IAsyncDisposable
         await _worker;
     }
 
-    /// <summary>Allocates final output paths according to the preset's <see cref="OutputRule"/>.</summary>
+    /// <summary>
+    /// Allocates final output paths according to the preset's <see cref="OutputRule"/>, and takes them back when the
+    /// conversion fails: engines write straight into these paths, so a failure (a full disk, a broken input, cancelling)
+    /// left a truncated file under the output's name, or a writer's "&lt;name&gt;.tmp" beside it. A file the preset
+    /// overwrites is moved aside first and put back if the conversion fails.
+    /// </summary>
     private sealed class FinalAllocator(JobQueue queue, OutputRule rule, OutputPathResolver.Tokens tokens) : IOutputAllocator
     {
+        private readonly List<(string Path, bool Existed, string? Backup)> _allocated = [];
+
         public string? Allocate(string extension, string? suffix = null)
         {
             // Reserve under a lock so two parallel files never pick the same name.
@@ -661,9 +700,97 @@ public sealed class JobQueue : IAsyncDisposable
 
                 queue._reservedOutputs.Add(path);
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                var existed = File.Exists(path) || Directory.Exists(path);
+                string? backup = null;
+                if (File.Exists(path))
+                {
+                    // Overwriting: the old file waits beside it (same volume, a rename) until the new one is complete.
+                    var aside = Path.Combine(Path.GetDirectoryName(path)!, $".{Path.GetFileName(path)}.easy-{Guid.NewGuid().ToString("N")[..8]}.bak");
+                    try
+                    {
+                        File.Move(path, aside);
+                        backup = aside;
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        // Can't be moved (locked by another app): overwritten in place as before.
+                    }
+                }
+                lock (_allocated)
+                    _allocated.Add((path, existed, backup));
                 // An empty extension asks for a folder (archive extraction): the converter creates it.
                 return path;
             }
+        }
+
+        /// <summary>The outputs are complete: overwritten files are gone for good, writers' leftovers removed.</summary>
+        public void Commit()
+        {
+            foreach (var (path, _, backup) in Taken())
+            {
+                if (backup is not null && !File.Exists(path) && !Directory.Exists(path))
+                    Restore(backup, path); // nothing was written there after all: the old file stays
+                else if (backup is not null)
+                    TryDeleteFile(backup);
+                TryDeleteFile(path + ".tmp");
+            }
+        }
+
+        /// <summary>The conversion failed: what it wrote is removed and overwritten files come back.</summary>
+        public void Discard()
+        {
+            foreach (var (path, existed, backup) in Taken())
+            {
+                try
+                {
+                    if (File.Exists(path) && (!existed || backup is not null))
+                        File.Delete(path);
+                    else if (Directory.Exists(path) && !existed)
+                        Directory.Delete(path, recursive: true);
+                    TryDeleteFile(path + ".tmp");
+                    if (backup is not null)
+                        Restore(backup, path);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    queue._log.LogWarning(ex, "Couldn't remove the incomplete output {Output}", path);
+                }
+                lock (queue._reservedOutputs)
+                    queue._reservedOutputs.Remove(path);
+            }
+        }
+
+        private void Restore(string backup, string path)
+        {
+            try
+            {
+                if (File.Exists(backup))
+                    File.Move(backup, path, overwrite: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                queue._log.LogWarning(ex, "Couldn't put {Output} back from {Backup}", path, backup);
+            }
+        }
+
+        private List<(string Path, bool Existed, string? Backup)> Taken()
+        {
+            lock (_allocated)
+            {
+                var taken = _allocated.ToList();
+                _allocated.Clear();
+                return taken;
+            }
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 
