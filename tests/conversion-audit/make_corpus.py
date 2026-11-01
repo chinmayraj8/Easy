@@ -277,7 +277,10 @@ def docx_corpus():
         '</w:p></w:txbxContent></v:textbox></v:shape></w:pict></mc:Fallback></mc:AlternateContent></w:r>'.format(nsdecls("w"))))
     hdr = d.sections[0].header.paragraphs[0]
     hdr._p.append(parse_xml(
-        '<w:r {}><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" type="#_x0000_t136" '
+        '<w:r {}><w:pict><v:shapetype xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" '
+        'id="_x0000_t136" coordsize="21600,21600" o:spt="136" adj="10800" path="m@7,l@8,m@5,21600l@6,21600e">'
+        '<v:path textpathok="t" o:connecttype="custom"/><v:textpath on="t" fitshape="t"/></v:shapetype>'
+        '<v:shape xmlns:v="urn:schemas-microsoft-com:vml" type="#_x0000_t136" '
         'style="position:absolute;margin-left:0;margin-top:0;width:400pt;height:100pt;rotation:315;'
         'mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;'
         'mso-position-vertical-relative:margin" fillcolor="silver" stroked="f"><v:fill opacity=".5"/>'
@@ -288,7 +291,9 @@ def docx_corpus():
         '<w:pBdr {}><w:top w:val="single" w:sz="12" w:space="1" w:color="FF0000"/>'
         '<w:bottom w:val="single" w:sz="12" w:space="1" w:color="FF0000"/></w:pBdr>'.format(nsdecls("w"))))
     shading(bp, "DDEBF7")
-    save(d, "objects", words=["EquationFollows", "TextBoxAnchor", "TextBoxContent", "BorderedShadedParagraph"],
+    # The equation must come out as text (E=mc², its superscript a separate span); LibreOffice needs its Math module
+    # (on Linux the libreoffice-math package) or it drops equations without a word.
+    save(d, "objects", words=["EquationFollows", "TextBoxAnchor", "TextBoxContent", "BorderedShadedParagraph", "E=mc"],
          any_words=["DRAFTMARK"], pages=1)
 
     # 13. Long document: 150+ pages with headings.

@@ -19,7 +19,7 @@ rendering.
 
 ## Running it
 
-Needs Python 3 with `python-docx reportlab pymupdf scikit-image pillow numpy`, LibreOffice (`soffice`, the reference
+Needs Python 3 with `python-docx reportlab pymupdf scikit-image pillow numpy`, LibreOffice (`soffice`, with `libreoffice-math` on Linux, the reference
 renderer and the DOCX → PDF engine off macOS-with-ONLYOFFICE) and `qpdf` (to encrypt a test PDF).
 
 ```bash
