@@ -140,6 +140,8 @@ def ink(a):
 
 def soffice(src, target, outdir, filt=None):
     """LibreOffice run directly: the reference renderer, and the way a DOCX is opened to look at it."""
+    if not shutil.which("soffice"):
+        return None  # no LibreOffice: the visual comparisons are skipped
     os.makedirs(outdir, exist_ok=True)
     profile = tempfile.mkdtemp(prefix="lo-ref-")
     try:
@@ -220,7 +222,8 @@ def audit_docx_to_pdf(cli, corpus, work, only):
                 for u in exp["links"]:
                     c.ok(u in uris, f"link {u} lost (found {uris})")
             if "images" in exp:
-                n = sum(len(p.get_images()) for p in d)
+                # Images drawn, those nested in form XObjects (as ONLYOFFICE writes them) included.
+                n = sum(len(p.get_image_info()) for p in d)
                 c.ok(n >= exp["images"], f"{n} pictures, expected {exp['images']}")
             if "fonts" in exp:
                 fonts = {f[3].split("+")[-1].replace("-", "").replace(",", "") for p in d for f in p.get_fonts()}
@@ -327,7 +330,9 @@ def audit_pdf_to_docx(cli, corpus, work, only):
                     c.fail(f"no section for page {i + 1} (sizes {sizes})")
         # Visual: render the DOCX (LibreOffice) and compare with the PDF.
         rendered = soffice(out, "pdf", os.path.join(work, "pdf2docx-render"))
-        if c.ok(rendered is not None, "the DOCX could not be opened and rendered"):
+        if not shutil.which("soffice"):
+            c.note("LibreOffice not installed: DOCX rendering not compared")
+        elif c.ok(rendered is not None, "the DOCX could not be opened and rendered"):
             with fitz.open(rendered) as d:
                 n = d.page_count
             if "pages" in exp:

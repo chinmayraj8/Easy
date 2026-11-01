@@ -24,7 +24,8 @@ from docx.shared import Cm, Inches, Pt, RGBColor
 from PIL import Image, ImageDraw, ImageFont
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "corpus"
-FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+FONT_DIR = os.environ.get("DEJAVU_DIR", "/usr/share/fonts/truetype/dejavu")  # macOS: point at an unzipped DejaVu
+FONT = os.path.join(FONT_DIR, "DejaVuSans.ttf")
 
 
 def expect(name, **facts):
@@ -352,7 +353,7 @@ def pdf_corpus():
     from reportlab.pdfgen import canvas
 
     pdfmetrics.registerFont(TTFont("DejaVu", FONT))
-    pdfmetrics.registerFont(TTFont("DejaVuSerif", "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"))
+    pdfmetrics.registerFont(TTFont("DejaVuSerif", os.path.join(FONT_DIR, "DejaVuSerif.ttf")))
 
     def new(name, size=A4):
         return canvas.Canvas(os.path.join(OUT, name + ".pdf"), pagesize=size)
@@ -448,7 +449,7 @@ def pdf_corpus():
     # Scanned: a page that is only a picture of text, with and without an OCR layer, and mixed with a digital page.
     scan = Image.new("L", (1240, 1754), 255)
     d = ImageDraw.Draw(scan)
-    f = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", 34)
+    f = ImageFont.truetype(os.path.join(FONT_DIR, "DejaVuSerif.ttf"), 34)
     for i in range(25):
         d.text((120, 150 + i * 56), f"ScannedLine{i:02d} printed on paper and scanned", fill=0, font=f)
     rnd = random.Random(1)
