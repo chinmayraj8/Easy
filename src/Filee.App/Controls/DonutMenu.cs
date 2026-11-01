@@ -907,8 +907,8 @@ public sealed partial class DonutMenu : Control
         double maxWidth, double maxHeight, Typeface bold, Typeface regular, bool hot)
     {
         var foreground = hot ? OnAccentBrush : item.IsEnabled ? Foreground : SecondaryForeground;
-        var width = Math.Clamp(maxWidth, 30, 120);
-        var label = MakeText(item.Label, bold, 13, foreground, width, maxLines: 2);
+        var (size, width) = LabelFit(item.Label, bold, Math.Clamp(maxWidth, 30, 120));
+        var label = MakeText(item.Label, bold, size, foreground, width, maxLines: 2);
         var showCaption = !string.IsNullOrEmpty(item.Caption) &&
                           !string.Equals(item.Caption, item.Label, StringComparison.OrdinalIgnoreCase) &&
                           label.Height + 14 < maxHeight;
@@ -920,6 +920,25 @@ public sealed partial class DonutMenu : Control
         DrawCentered(context, label, anchor.X, y);
         if (caption is not null)
             DrawCentered(context, caption, anchor.X, y + label.Height);
+    }
+
+    /// <summary>
+    /// The label's font size and box width: 13, or smaller (down to 9) so its longest word fits the slice; a word still
+    /// wider gets a box as wide as it (up to 120). A word wider than the box was broken in the middle ("Passwo / rd"),
+    /// with fonts wider than the bundled one or with many slices.
+    /// </summary>
+    internal static (double Size, double Width) LabelFit(string label, Typeface typeface, double width)
+    {
+        const double Size = 13, Smallest = 9;
+        // A little room: the layout rounds, and a word exactly as wide as the box can still wrap.
+        double Longest(double size) => label.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => MakeText(word, typeface, size, null, 100_000).WidthIncludingTrailingWhitespace + 2)
+            .DefaultIfEmpty(0).Max();
+        var longest = Longest(Size);
+        if (longest <= width)
+            return (Size, width);
+        var size = Math.Max(Smallest, Math.Floor(Size * width / longest * 2) / 2);
+        return (size, Math.Clamp(Longest(size), width, Math.Max(width, 120)));
     }
 
     private Point EditButtonCenter(int index)

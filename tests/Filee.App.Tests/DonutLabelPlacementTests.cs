@@ -94,4 +94,25 @@ public class DonutLabelPlacementTests
             Marshal.Copy(buffer.Address + row * buffer.RowBytes, pixels, row * width * 4, width * 4);
         return (pixels, width, height);
     }
+
+    [AvaloniaFact]
+    public void A_word_wider_than_its_slice_gets_a_smaller_font_instead_of_breaking()
+    {
+        // Easy: "Password" and "Compress" were broken mid-word ("Passwo / rd") in a donut of twelve slices.
+        TestServices.EnsureInitialized("en");
+        var typeface = new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold);
+        static double Width(string word, Typeface face, double size) =>
+            new FormattedText(word, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, size, null).Width;
+
+        var narrow = Width("Password", typeface, 13) * 0.8;
+        var (size, width) = DonutMenu.LabelFit("Password", typeface, narrow);
+        Assert.InRange(size, 9, 12.5);
+        Assert.True(Width("Password", typeface, size) < width, $"{size} {width}");
+        // Too narrow even for the smallest size: the box grows to the word rather than breaking it.
+        (size, width) = DonutMenu.LabelFit("Compress", typeface, 20);
+        Assert.Equal(9, size);
+        Assert.True(Width("Compress", typeface, 9) < width, $"{width}");
+        // Short words keep the normal size; a label of short words wraps between them.
+        Assert.Equal(13, DonutMenu.LabelFit("PPTX (slides)", typeface, Width("(slides)", typeface, 13) + 4).Size);
+    }
 }

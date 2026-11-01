@@ -120,7 +120,7 @@ public sealed class LibreOfficeConverter : IConverter
             // The first attempt's error, which is about the user's own file.
             if (produced is null)
                 throw new InvalidOperationException(
-                    $"LibreOffice produced no output (exit {result.ExitCode}). {result.StandardError.Trim()}");
+                    $"LibreOffice produced no output (exit {result.ExitCode}). {Reason(result.StandardError)}".TrimEnd());
 
             var target = step.Output.Allocate(step.To);
             if (target is null)
@@ -133,6 +133,21 @@ public sealed class LibreOfficeConverter : IConverter
         {
             ReturnProfile(slot);
         }
+    }
+
+    /// <summary>
+    /// What LibreOffice said about the failure, without the start-up warnings it prints on every run ("failed to launch
+    /// javaldx" when Java isn't installed): those led the message and the reason ("source file could not be loaded")
+    /// was cut off in the toast.
+    /// </summary>
+    internal static string Reason(string standardError)
+    {
+        var lines = standardError.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(l => !l.Contains("javaldx", StringComparison.OrdinalIgnoreCase)
+                        && !l.StartsWith("Warning: failed to read path from javaldx", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var errors = lines.Where(l => l.StartsWith("Error", StringComparison.OrdinalIgnoreCase)).ToList();
+        return string.Join(' ', errors.Count > 0 ? errors : lines);
     }
 
     /// <summary>Runs LibreOffice into a fresh folder; returns the file it wrote (null if none) and how it ended.</summary>

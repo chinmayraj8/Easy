@@ -83,4 +83,16 @@ public class LibreOfficeRouteTests(EngineFixture fx) : IClassFixture<EngineFixtu
         public Task<IReadOnlyList<string>> ConvertAsync(ConversionStep step, IProgress<double>? progress, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
     }
+
+    [Fact]
+    public void Failure_message_gives_the_reason_not_the_java_warning()
+    {
+        // Easy: LibreOffice prints this warning on every run without Java; it led the error toast and the reason was
+        // cut off.
+        const string StandardError = "Warning: failed to launch javaldx - java may not function correctly\nError: source file could not be loaded\n";
+
+        Assert.Equal("Error: source file could not be loaded", LibreOfficeConverter.Reason(StandardError));
+        Assert.Equal("something else went wrong", LibreOfficeConverter.Reason("something else went wrong\n"));
+        Assert.Equal("", LibreOfficeConverter.Reason(""));
+    }
 }
