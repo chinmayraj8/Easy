@@ -170,8 +170,31 @@ public partial class OnlyOfficeConverterTests(EngineFixture fx) : IClassFixture<
         Assert.Contains("w:name=\"Times New Roman\"", table);
     }
 
+    /// <summary>x2t made an empty DOCX of a password-protected PDF and reported it converted.</summary>
     [Fact]
-    public void Pdf_to_docx_prefers_onlyoffice_until_the_docx_writer_is_moved_up()
+    public async Task A_password_protected_pdf_fails_instead_of_becoming_an_empty_docx()
+    {
+        SkipUnlessInstalled();
+        var folder = fx.NewFolder();
+        var pdf = Path.Combine(folder, "locked.pdf");
+        using (var document = new PdfSharp.Pdf.PdfDocument())
+        {
+            document.AddPage();
+            document.SecuritySettings.UserPassword = "secret";
+            document.Save(pdf);
+        }
+        var output = Path.Combine(folder, "out.docx");
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Engine.ConvertAsync(
+            new ConversionStep(pdf, "pdf", "docx", new Preset { TargetFormat = "docx" }, new FixedOutput(output), folder),
+            null, TestContext.Current.CancellationToken));
+
+        Assert.Contains("password", error.Message);
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void Pdf_to_docx_prefers_the_docx_writer_until_onlyoffice_is_moved_up()
     {
         SkipUnlessInstalled();
         var converters = fx.Converters.Append(Engine).Where(c => c.GetStatus().IsAvailable).ToList();
@@ -179,10 +202,12 @@ public partial class OnlyOfficeConverterTests(EngineFixture fx) : IClassFixture<
             new(converters, c => Math.Min(priority.IndexOf(c.Id) is >= 0 and var i ? i : priority.Count, 9));
 
         var defaults = new Filee.Core.Settings.AppSettings().EnginePriority;
-        Assert.Equal("onlyoffice", Assert.Single(Planner(defaults).Plan("pdf", "docx")!.Steps).Converter.Id);
+        Assert.Equal("docx-writer", Assert.Single(Planner(defaults).Plan("pdf", "docx")!.Steps).Converter.Id);
 
-        List<string> writerFirst = ["docx-writer", .. defaults.Where(id => id != "docx-writer")];
-        Assert.Equal("docx-writer", Assert.Single(Planner(writerFirst).Plan("pdf", "docx")!.Steps).Converter.Id);
+        List<string> onlyOfficeFirst = ["onlyoffice", .. defaults];
+        Assert.Equal("onlyoffice", Assert.Single(Planner(onlyOfficeFirst).Plan("pdf", "docx")!.Steps).Converter.Id);
+        // Word → PDF stays with ONLYOFFICE.
+        Assert.Equal("onlyoffice", Assert.Single(Planner(defaults).Plan("docx", "pdf")!.Steps).Converter.Id);
     }
 
     private sealed class FixedOutput(string path) : IOutputAllocator

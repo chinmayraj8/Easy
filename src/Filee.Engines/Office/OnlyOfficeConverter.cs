@@ -40,14 +40,15 @@ public sealed class OnlyOfficeConverter(ILogger<OnlyOfficeConverter>? log = null
 
     /// <summary>
     /// One direct edge per format to PDF, cheaper than the two-step HWPX route (and preferred over it), and PDF → DOCX.
-    /// That one costs 13: with both engines at the default priority it beats the built-in DOCX writer (8 + its PDF
-    /// penalty 6), and moving "docx-writer" up in Settings → Engines switches back. Every edge is covered by
+    /// That one costs 16: at the default priority the built-in DOCX writer (8 + its PDF penalty 6) wins, since x2t drops
+    /// links, rotated text and a scan's OCR text layer, which the writer keeps (tests/conversion-audit on macOS: 5 of 10
+    /// against 10 of 10). Moving "onlyoffice" to the top of Settings → Engines switches to it. Every edge is covered by
     /// OnlyOfficeConverterTests.
     /// </summary>
     public IReadOnlyList<ConversionEdge> Edges { get; } =
     [
         .. new[] { "docx", "doc", "rtf", "odt", "pptx", "xlsx" }.Select(from => new ConversionEdge(from, "pdf")),
-        new("pdf", "docx", Cost: 13),
+        new("pdf", "docx", Cost: 16),
     ];
 
     /// <summary>Applications folders searched for ONLYOFFICE.app (tests point it elsewhere).</summary>
@@ -71,6 +72,20 @@ public sealed class OnlyOfficeConverter(ILogger<OnlyOfficeConverter>? log = null
     public async Task<IReadOnlyList<string>> ConvertAsync(ConversionStep step, IProgress<double>? progress, CancellationToken cancellationToken)
     {
         var app = Locate() ?? throw new InvalidOperationException("ONLYOFFICE is not installed.");
+        // x2t turns a password-protected PDF into an empty DOCX and exits 0; the rebuild below then fails and that empty
+        // file was kept as the result.
+        if (step.From == "pdf")
+        {
+            try { PdfDocument.Open(step.InputPath).Dispose(); }
+            catch (UglyToad.PdfPig.Exceptions.PdfDocumentEncryptedException)
+            {
+                throw new InvalidOperationException("The PDF is password-protected. Remove the password, then convert it.");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // A PDF PdfPig can't parse is still x2t's to try, as before.
+            }
+        }
         var output = step.Output.Allocate(step.To);
         if (output is null)
             return [];
