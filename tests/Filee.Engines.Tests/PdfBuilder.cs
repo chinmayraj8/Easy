@@ -120,6 +120,15 @@ internal sealed class PdfBuilder
         return this;
     }
 
+    /// <summary>Text that is there but not drawn (rendering mode 3), like the OCR layer over a scanned page.</summary>
+    public PdfBuilder InvisibleLine(string text, double size, PdfDocumentBuilder.AddedFont font, double x, double y)
+    {
+        Page.SetTextRenderingMode(TextRenderingMode.Neither);
+        Page.AddText(text, size, new PdfPoint(x, _height - y), font);
+        Page.SetTextRenderingMode(TextRenderingMode.Fill);
+        return this;
+    }
+
     /// <summary>A web link over the rectangle.</summary>
     public PdfBuilder Link(string url, double x, double y, double width, double height)
     {
@@ -138,6 +147,44 @@ internal sealed class PdfBuilder
     public string Save(string path)
     {
         File.WriteAllBytes(path, _builder.Build());
+        return path;
+    }
+
+    /// <summary>
+    /// A one-page A4 PDF written by hand (PdfPig's writer can't turn text): Helvetica lines, each upright or turned by
+    /// 90° to read upwards; <c>y</c> is the baseline start in points from the top.
+    /// </summary>
+    public static string WithTurnedText(string path, params (string Text, double X, double Y, bool Turned)[] lines)
+    {
+        var content = new System.Text.StringBuilder();
+        foreach (var (text, x, y, turned) in lines)
+        {
+            var escaped = text.Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
+            content.Append(System.FormattableString.Invariant(
+                $"BT /F1 12 Tf {(turned ? "0 1 -1 0" : "1 0 0 1")} {x} {842 - y} Tm ({escaped}) Tj ET\n"));
+        }
+        var stream = content.ToString();
+        string[] objects =
+        [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+            $"<< /Length {System.Text.Encoding.ASCII.GetByteCount(stream)} >>\nstream\n{stream}endstream",
+        ];
+        var pdf = new System.Text.StringBuilder("%PDF-1.4\n");
+        var offsets = new List<int>();
+        for (var i = 0; i < objects.Length; i++)
+        {
+            offsets.Add(System.Text.Encoding.ASCII.GetByteCount(pdf.ToString()));
+            pdf.Append($"{i + 1} 0 obj\n{objects[i]}\nendobj\n");
+        }
+        var xref = System.Text.Encoding.ASCII.GetByteCount(pdf.ToString());
+        pdf.Append($"xref\n0 {objects.Length + 1}\n0000000000 65535 f \n");
+        foreach (var offset in offsets)
+            pdf.Append($"{offset:D10} 00000 n \n");
+        pdf.Append($"trailer\n<< /Size {objects.Length + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n");
+        File.WriteAllText(path, pdf.ToString(), System.Text.Encoding.ASCII);
         return path;
     }
 

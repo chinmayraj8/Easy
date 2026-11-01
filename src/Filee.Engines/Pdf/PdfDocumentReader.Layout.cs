@@ -247,6 +247,20 @@ internal sealed partial class PdfDocumentReader
             (item.ContainerLeft, item.ContainerRight) = (members.Min(i => i.Left), members.Max(i => i.Right));
         }
 
+        // Columns of about equal width become columns in the document too (Word's columns are equal); the gap is the
+        // narrowest distance between neighbouring columns' text.
+        var columnCount = edges.Count / 2;
+        var bounds = Enumerable.Range(0, columnCount)
+            .Select(c => columnItems.Where(i => ColumnOf(i) == c).ToList())
+            .Select(m => m.Count == 0 ? (Left: 0.0, Right: 0.0) : (Left: m.Min(i => i.Left), Right: m.Max(i => i.Right))).ToList();
+        var widths = bounds.Select(b => b.Right - b.Left).ToList();
+        if (widths.All(w => w > 0) && widths.Max() / widths.Min() < 1.3)
+        {
+            var gap = Enumerable.Range(1, columnCount - 1).Min(c => bounds[c].Left - bounds[c - 1].Right);
+            foreach (var item in columnItems)
+                (item.Column, item.ColumnCount, item.ColumnGap) = (ColumnOf(item), columnCount, Math.Max(6, gap));
+        }
+
         // Spanning items split the page into bands; each band is read column by column.
         var result = new List<Item>();
         var remaining = columnItems.ToList();
