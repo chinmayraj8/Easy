@@ -134,8 +134,22 @@ internal static partial class PdfLayoutDocx
     };
 
     /// <summary>A font name as a key: lower case, no spaces, no PostScript suffixes ("ArialMT", "TimesNewRomanPSMT").</summary>
-    private static string FontKey(string name) =>
+    internal static string FontKey(string name) =>
         PostScriptSuffix().Replace(string.Concat(name.Where(char.IsLetterOrDigit)), "").ToLowerInvariant();
+
+    /// <summary>
+    /// <paramref name="family"/> as an installed font: itself, else a metric-compatible one; null when neither is.
+    /// <paramref name="installed"/> maps <see cref="FontKey"/> to the installed family name.
+    /// </summary>
+    internal static string? InstalledOrEquivalent(string family, IReadOnlyDictionary<string, string> installed)
+    {
+        var key = FontKey(family);
+        if (installed.TryGetValue(key, out var exact))
+            return exact;
+        return Equivalents.TryGetValue(key, out var others) && others.Select(FontKey).FirstOrDefault(installed.ContainsKey) is { } k
+            ? installed[k]
+            : null;
+    }
 
     /// <summary>
     /// x2t names a font it has, not the PDF's ("Helvetica" for an embedded Liberation Sans), and other fonts have other
@@ -145,15 +159,7 @@ internal static partial class PdfLayoutDocx
     private static IEnumerable<string> RestoreFonts(XDocument styles, Dictionary<string, Dictionary<string, int>> uses, ISet<string>? installed)
     {
         var byKey = (installed ?? new HashSet<string>()).GroupBy(FontKey).ToDictionary(g => g.Key, g => g.First());
-        string Name(string pdfFamily)
-        {
-            var key = FontKey(pdfFamily);
-            if (byKey.TryGetValue(key, out var exact))
-                return exact;
-            if (Equivalents.TryGetValue(key, out var others) && others.FirstOrDefault(o => byKey.ContainsKey(FontKey(o))) is { } equivalent)
-                return byKey[FontKey(equivalent)];
-            return SpacedName().Replace(pdfFamily, "$1 $2");
-        }
+        string Name(string pdfFamily) => InstalledOrEquivalent(pdfFamily, byKey) ?? SpacedName().Replace(pdfFamily, "$1 $2");
         foreach (var (styleId, families) in uses)
         {
             var style = styles.Root?.Elements(W + "style").FirstOrDefault(s => s.Attribute(W + "styleId")?.Value == styleId);

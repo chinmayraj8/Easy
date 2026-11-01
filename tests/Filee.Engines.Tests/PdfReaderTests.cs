@@ -369,8 +369,26 @@ public class PdfReaderTests(EngineFixture fx) : IClassFixture<EngineFixture>
     [InlineData("Helvetica-Oblique", "Arial")]
     [InlineData("QWERTY+MalgunGothic,Bold", "Malgun Gothic")]
     [InlineData("NanumGothic", "NanumGothic")]
+    [InlineData("Liberation Serif Bold", "Liberation Serif")]
+    [InlineData("BAAAAA+LiberationSerif", "LiberationSerif")]
     [InlineData("F1", null)]
     [InlineData("T3Font_2", null)]
     public void Font_names_become_families(string postScript, string? family) =>
         Assert.Equal(family, PdfDocumentReader.FontFamily(postScript));
+
+    /// <summary>
+    /// Easy: a PDF from LibreOffice (embedded LiberationSerif) became a DOCX naming "LiberationSerif", which a Mac
+    /// doesn't have: shown in Arial, 34 pages reflowed to 38. A missing font is named as an installed equivalent.
+    /// </summary>
+    [Theory]
+    [InlineData("LiberationSerif", "Times New Roman")]
+    [InlineData("Liberation Sans", "Arial")]
+    [InlineData("Arial", "Arial")]
+    [InlineData("NanumGothic", null)]
+    public void A_missing_font_is_named_as_an_installed_equivalent(string family, string? expected)
+    {
+        var installed = new[] { "Times New Roman", "Arial", "Courier New" }
+            .ToDictionary(Filee.Engines.Office.PdfLayoutDocx.FontKey);
+        Assert.Equal(expected, Filee.Engines.Office.PdfLayoutDocx.InstalledOrEquivalent(family, installed));
+    }
 }

@@ -369,9 +369,21 @@ internal sealed partial class PdfDocumentReader
             Bold: bold,
             Italic: italic,
             Size: (int)(Math.Round(size * 2) * 50),
-            Font: FontFamily(name),
+            Font: Installed(FontFamily(name)),
             Color: Color(letter.Color));
     }
+
+    /// <summary>The computer's font families by <see cref="Office.PdfLayoutDocx.FontKey"/>.</summary>
+    private static readonly Lazy<Dictionary<string, string>> SystemFonts = new(() =>
+        SKFontManager.Default.FontFamilies.GroupBy(Office.PdfLayoutDocx.FontKey).ToDictionary(g => g.Key, g => g.First()));
+
+    /// <summary>
+    /// A PDF's embedded font that isn't installed ("LiberationSerif" in a PDF from LibreOffice) is named as an installed
+    /// metric-compatible one (Times New Roman), so lines break as in the PDF; otherwise the viewer picks some font
+    /// (Arial on a Mac) and the text reflows onto more pages.
+    /// </summary>
+    private static string? Installed(string? family) =>
+        family is null ? null : Office.PdfLayoutDocx.InstalledOrEquivalent(family, SystemFonts.Value) ?? family;
 
     /// <summary>"ABCDEF+TimesNewRomanPS-BoldMT" → "Times New Roman"; null for names that are no family (F1, T3Font_0).</summary>
     internal static string? FontFamily(string postScriptName)
@@ -380,6 +392,8 @@ internal sealed partial class PdfDocumentReader
         var cut = name.IndexOfAny(['-', ',']);
         if (cut > 0)
             name = name[..cut];
+        // "Liberation Serif Bold": a full name, not a family (bold and italic are read from the font separately).
+        name = StyleWords().Replace(name, "");
         foreach (var suffix in new[] { "PSMT", "MT", "PS" })
         {
             if (name.Length > suffix.Length + 2 && name.EndsWith(suffix, StringComparison.Ordinal))
@@ -393,6 +407,9 @@ internal sealed partial class PdfDocumentReader
             return known;
         return name.Length < 3 || Regex.IsMatch(name, "^(F|T3Font_?|Font)\\d+$", RegexOptions.CultureInvariant) ? null : name;
     }
+
+    [GeneratedRegex(@"(\s+(Regular|Bold|Italic|Oblique|Roman))+$", RegexOptions.CultureInvariant)]
+    private static partial Regex StyleWords();
 
     /// <summary>
     /// "#RRGGBB" of a text colour, black included: heading styles of the HWPX template are coloured, the PDF's text
@@ -849,6 +866,10 @@ internal sealed partial class PdfDocumentReader
         var headingLevels = HeadingLevels(items, bodySize);
         var lineRatio = TypicalLineRatio(items);
         var (left, right, top, bottom) = Margins(pages, lineRatio);
+        // The bottom margin measured on the fullest page leaves it no room, and word processors set a page a few points
+        // taller (a line under each picture, rounded line heights): its last caption or table row spilled onto a page of
+        // its own. Every PDF page starts with a page break, so room here can't pull the next page's text up.
+        bottom = Math.Max(18, bottom - Math.Min(bodySize * lineRatio * 2, bottom / 2));
 
         HSection? section = null;
         var columns = HColumns.Single;
