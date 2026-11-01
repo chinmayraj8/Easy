@@ -123,6 +123,12 @@ internal sealed partial class PdfDocumentReader
         public PdfRectangle? PictureBounds { get; init; }
         public RuledTable? Table { get; init; }
 
+        /// <summary>Shading and lines around the paragraph (see PdfDocumentReader.Decorations.cs), or null.</summary>
+        public HParaBox? Decoration { get; set; }
+
+        /// <summary>A frame drawn around the picture, or null.</summary>
+        public HBorder? Outline { get; set; }
+
         private PdfRectangle? Box => PictureBounds ?? Table?.Bounds;
 
         public double Left => Box?.Left ?? Lines.Min(l => l.Left);
@@ -169,6 +175,9 @@ internal sealed partial class PdfDocumentReader
         public List<Item> Items { get; set; } = [];
         public bool Scanned { get; set; }
         public string? ScanPath { get; set; }
+
+        /// <summary>A frame around the page, or null.</summary>
+        public HPageBorder? Border { get; set; }
     }
 
     // ───────────────────────── Document ─────────────────────────
@@ -300,12 +309,17 @@ internal sealed partial class PdfDocumentReader
         }
 
         // Plain text (TXT, page texts for slides) keeps table cells as paragraphs in reading order.
-        var tables = _textOnly ? [] : RuledTables(page.Paths, crop, words);
+        var (rules, shades, frames) = _textOnly ? ([], [], []) : PageRules(page.Paths, crop);
+        content.Border = PageFrame(rules, content.Width, content.Height);
+        var tables = _textOnly ? [] : RuledTables(rules, shades, words);
         content.Items = words.Count > 0 ? TextItems(words) : [];
         content.Items.AddRange(TurnedText(turnedWords, crop));
         content.Items.AddRange(tables.Select(t => new Item { Table = t }));
         if (!_textOnly)
+        {
             content.Items.AddRange(Pictures(page, content, crop));
+            Decorate(content, tables, rules, shades, frames);
+        }
         return content;
     }
 
@@ -871,6 +885,8 @@ internal sealed partial class PdfDocumentReader
         // its own. Every PDF page starts with a page break, so room here can't pull the next page's text up.
         bottom = Math.Max(18, bottom - Math.Min(bodySize * lineRatio * 2, bottom / 2));
 
+        // One frame for every framed page (the same frame measured a point apart would start a section per page).
+        var frame = pages.Select(p => p.Border).FirstOrDefault(b => b is not null);
         HSection? section = null;
         var columns = HColumns.Single;
         foreach (var page in pages)
@@ -878,7 +894,8 @@ internal sealed partial class PdfDocumentReader
             // With a header the margin is split: paper edge to the header, then the header's area down to the body.
             var (headerTop, header) = Split(top, running.Header);
             var (footerBottom, footer) = Split(bottom, running.Footer);
-            var hpage = new HPage(Hwp(page.Width), Hwp(page.Height), Hwp(left), Hwp(right), headerTop, footerBottom, header, footer, 0);
+            var hpage = new HPage(Hwp(page.Width), Hwp(page.Height), Hwp(left), Hwp(right), headerTop, footerBottom, header, footer, 0,
+                page.Border is null ? null : frame);
             var newSection = section is null || section.Page != hpage;
             if (newSection)
             {
@@ -935,6 +952,8 @@ internal sealed partial class PdfDocumentReader
                     HBlock block = item.IsPicture ? PictureParagraph(item, previous)
                         : item.IsTable ? TableBlock(item, lineRatio)
                         : TextParagraph(item, previous, headingLevels, lineRatio);
+                    if (block is HParagraph { } boxed && item.Decoration is { } decoration)
+                        boxed.Box = decoration;
 
                     // Columns start (or end) here: a continuous section break; the next column starts with a column break.
                     // A table can carry neither: a tiny empty paragraph before it does.
@@ -1078,7 +1097,7 @@ internal sealed partial class PdfDocumentReader
         paragraph.Format = new HParaFormat(Align: centered ? HAlign.Center : HAlign.Left, Before: SpaceBefore(item, previous), After: 0,
             // Word's single line spacing (130 % in the model): a smaller multiple would cut off the top of the picture.
             LineSpacing: new HLineSpacing(HLineSpacingKind.Percent, 130));
-        paragraph.Inlines.Add(new HImage(item.PicturePath!) { Width = Hwp(bounds.Width), Height = Hwp(bounds.Height) });
+        paragraph.Inlines.Add(new HImage(item.PicturePath!) { Width = Hwp(bounds.Width), Height = Hwp(bounds.Height), Outline = item.Outline });
         return paragraph;
     }
 

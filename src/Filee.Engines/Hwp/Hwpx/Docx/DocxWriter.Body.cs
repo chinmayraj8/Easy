@@ -119,6 +119,11 @@ internal sealed partial class DocxWriter
         sb.Append($"<w:pgSz w:w=\"{Number(Twips(page.Width))}\" w:h=\"{Number(Twips(page.Height))}\"{(page.Landscape ? " w:orient=\"landscape\"" : "")}/>");
         sb.Append($"<w:pgMar w:top=\"{Number(Twips(page.Top + page.Header))}\" w:right=\"{Number(Twips(page.Right))}\" w:bottom=\"{Number(Twips(page.Bottom + page.Footer))}\" w:left=\"{Number(Twips(page.Left))}\" ")
           .Append($"w:header=\"{Number(Twips(page.Top))}\" w:footer=\"{Number(Twips(page.Bottom))}\" w:gutter=\"{Number(Twips(page.Gutter))}\"/>");
+        if (page.Border is { } frame)
+            sb.Append("<w:pgBorders w:offsetFrom=\"page\">")
+              .Append(Border("top", frame.Line, frame.Top)).Append(Border("left", frame.Line, frame.Left))
+              .Append(Border("bottom", frame.Line, frame.Bottom)).Append(Border("right", frame.Line, frame.Right))
+              .Append("</w:pgBorders>");
         if (!continuous && section.StartPageNumber is { } start)
             sb.Append($"<w:pgNumType w:start=\"{Number(start)}\"/>");
         sb.Append(columns.Count > 1
@@ -230,6 +235,17 @@ internal sealed partial class DocxWriter
             sb.Append("<w:widowControl w:val=\"0\"/>");
         if (paragraph.List is { Numbered: true } list)
             sb.Append($"<w:numPr><w:ilvl w:val=\"{Number(Math.Clamp(list.Level, 0, 8))}\"/><w:numId w:val=\"{Number(NumberingId(list.Numbering))}\"/></w:numPr>");
+        if (paragraph.Box is { } box)
+        {
+            var b = box.Borders;
+            if (b != HBorders.Empty)
+                sb.Append("<w:pBdr>")
+                  .Append(BoxBorder("top", b.Top, box.Space)).Append(BoxBorder("left", b.Left, box.Space))
+                  .Append(BoxBorder("bottom", b.Bottom, box.Space)).Append(BoxBorder("right", b.Right, box.Space))
+                  .Append("</w:pBdr>");
+            if (Hex(box.Fill) is { } fill)
+                sb.Append($"<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"{fill}\"/>");
+        }
 
         if (format.Tabs is { Count: > 0 } tabs)
         {
@@ -598,8 +614,12 @@ internal sealed partial class DocxWriter
         return sb.Append("</w:tc>").ToString();
     }
 
-    /// <summary>A border edge: style, width in eighths of a point (2..96), colour.</summary>
-    private static string Border(string edge, HBorder border)
+    /// <summary>A paragraph border edge; a side without a line is left out (nil would hide a style's border).</summary>
+    private static string BoxBorder(string edge, HBorder border, double space) =>
+        border.Style == HBorderStyle.None ? "" : Border(edge, border, space);
+
+    /// <summary>A border edge: style, width in eighths of a point (2..96), colour, and the space to the text (0..31 pt).</summary>
+    private static string Border(string edge, HBorder border, double space = 0)
     {
         if (border.Style == HBorderStyle.None)
             return $"<w:{edge} w:val=\"nil\"/>";
@@ -612,6 +632,7 @@ internal sealed partial class DocxWriter
             _ => "single",
         };
         var eighths = Math.Clamp((int)Math.Round(border.WidthMm / 25.4 * 72 * 8), 2, 96);
-        return $"<w:{edge} w:val=\"{style}\" w:sz=\"{Number(eighths)}\" w:space=\"0\" w:color=\"{Hex(border.Color) ?? "auto"}\"/>";
+        var points = Math.Clamp((int)Math.Round(space), 0, 31);
+        return $"<w:{edge} w:val=\"{style}\" w:sz=\"{Number(eighths)}\" w:space=\"{Number(points)}\" w:color=\"{Hex(border.Color) ?? "auto"}\"/>";
     }
 }

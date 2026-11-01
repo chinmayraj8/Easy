@@ -120,6 +120,13 @@ internal sealed class PdfBuilder
         return this;
     }
 
+    /// <summary>A stroked (outlined) rectangle with its top-left corner at (x, y).</summary>
+    public PdfBuilder Frame(double x, double y, double width, double height, double lineWidth = 0.75)
+    {
+        Page.DrawRectangle(new PdfPoint(x, _height - y - height), width, height, lineWidth);
+        return this;
+    }
+
     /// <summary>Text that is there but not drawn (rendering mode 3), like the OCR layer over a scanned page.</summary>
     public PdfBuilder InvisibleLine(string text, double size, PdfDocumentBuilder.AddedFont font, double x, double y)
     {

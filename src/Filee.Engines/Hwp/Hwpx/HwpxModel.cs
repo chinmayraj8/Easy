@@ -39,11 +39,22 @@ internal sealed class HSection
 /// <param name="Header">Height of the header area (한글 "머리말").</param>
 /// <param name="Bottom">Paper edge to the footer (한글 "아래쪽").</param>
 /// <param name="Footer">Height of the footer area (한글 "꼬리말").</param>
-internal sealed record HPage(int Width, int Height, int Left, int Right, int Top, int Bottom, int Header, int Footer, int Gutter)
+/// <param name="Border">A line around the page, or null (DOCX only; 한글 output leaves it out).</param>
+internal sealed record HPage(int Width, int Height, int Left, int Right, int Top, int Bottom, int Header, int Footer, int Gutter,
+    HPageBorder? Border = null)
 {
     public bool Landscape => Width > Height;
     public int TextWidth => Math.Max(2000, Width - Left - Right - Gutter);
 }
+
+/// <summary>A line around the page; the distances (points) are from each paper edge to the line.</summary>
+internal sealed record HPageBorder(HBorder Line, double Top, double Right, double Bottom, double Left);
+
+/// <summary>
+/// Fill and border lines around a paragraph (DOCX w:shd and w:pBdr; 한글 output leaves them out). Paragraphs in a row
+/// with an equal box are drawn as one box. Space: points between the text and the lines.
+/// </summary>
+internal sealed record HParaBox(string? Fill, HBorders Borders, double Space);
 
 /// <summary>Newspaper-style columns.</summary>
 internal sealed record HColumns(int Count, int Gap, bool Separator)
@@ -84,6 +95,9 @@ internal sealed class HParagraph : HBlock
 
     public bool PageBreakBefore { get; set; }
     public bool ColumnBreakBefore { get; set; }
+
+    /// <summary>Shading and border lines around the paragraph, or null.</summary>
+    public HParaBox? Box { get; set; }
 
     /// <summary>Columns change here without a new page (DOCX continuous section break); null = unchanged.</summary>
     public HColumns? ColumnsChange { get; set; }
@@ -258,6 +272,9 @@ internal sealed class HImage(string path) : HInline
 
     /// <summary>Position for floating pictures; null = inline, moves with the text like a character.</summary>
     public HAnchor? Anchor { get; set; }
+
+    /// <summary>A line around the picture, or null (DOCX only).</summary>
+    public HBorder? Outline { get; set; }
 }
 
 /// <summary>A box with its own paragraphs (DOCX text box, 한글 글상자).</summary>

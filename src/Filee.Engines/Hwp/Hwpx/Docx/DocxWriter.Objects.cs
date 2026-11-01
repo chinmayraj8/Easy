@@ -65,7 +65,7 @@ internal sealed partial class DocxWriter
             $"<a:graphic><a:graphicData uri=\"{PictureUri}\"><pic:pic>" +
             $"<pic:nvPicPr><pic:cNvPr id=\"{Number(id)}\" name=\"{name}\"/><pic:cNvPicPr/></pic:nvPicPr>" +
             $"<pic:blipFill><a:blip r:embed=\"{relationship}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>" +
-            $"<pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{Number(Emu(w))}\" cy=\"{Number(Emu(h))}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr>" +
+            $"<pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{Number(Emu(w))}\" cy=\"{Number(Emu(h))}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom>{(image.Outline is { } outline ? Outline(outline) : "")}</pic:spPr>" +
             "</pic:pic></a:graphicData></a:graphic>";
         return $"<w:r><w:drawing>{Frame(image.Anchor, w, h, id, name, graphic, "<a:graphicFrameLocks noChangeAspect=\"1\"/>")}</w:drawing></w:r>";
     }
@@ -240,23 +240,23 @@ internal sealed partial class DocxWriter
             sb.Append("<a:noFill/>");
         }
 
+        return sb.Append(Outline(line)).Append("</wps:spPr>").ToString();
+    }
+
+    /// <summary>a:ln of a shape or picture: none, or width, colour and dashes.</summary>
+    private static string Outline(HBorder line)
+    {
         if (line.Style == HBorderStyle.None)
+            return "<a:ln><a:noFill/></a:ln>";
+        var dash = line.Style switch
         {
-            sb.Append("<a:ln><a:noFill/></a:ln>");
-        }
-        else
-        {
-            var dash = line.Style switch
-            {
-                HBorderStyle.Dash => "<a:prstDash val=\"dash\"/>",
-                HBorderStyle.Dot => "<a:prstDash val=\"sysDot\"/>",
-                HBorderStyle.DashDot => "<a:prstDash val=\"dashDot\"/>",
-                _ => "",
-            };
-            var widthEmu = Math.Max(3175, (long)Math.Round(line.WidthMm * 36000));
-            sb.Append($"<a:ln w=\"{Number(widthEmu)}\"{(line.Style == HBorderStyle.Double ? " cmpd=\"dbl\"" : "")}><a:solidFill><a:srgbClr val=\"{Hex(line.Color) ?? "000000"}\"/></a:solidFill>{dash}</a:ln>");
-        }
-        return sb.Append("</wps:spPr>").ToString();
+            HBorderStyle.Dash => "<a:prstDash val=\"dash\"/>",
+            HBorderStyle.Dot => "<a:prstDash val=\"sysDot\"/>",
+            HBorderStyle.DashDot => "<a:prstDash val=\"dashDot\"/>",
+            _ => "",
+        };
+        var widthEmu = Math.Max(3175, (long)Math.Round(line.WidthMm * 36000));
+        return $"<a:ln w=\"{Number(widthEmu)}\"{(line.Style == HBorderStyle.Double ? " cmpd=\"dbl\"" : "")}><a:solidFill><a:srgbClr val=\"{Hex(line.Color) ?? "000000"}\"/></a:solidFill>{dash}</a:ln>";
     }
 
     // ───────────────────────── Links and bookmarks ─────────────────────────

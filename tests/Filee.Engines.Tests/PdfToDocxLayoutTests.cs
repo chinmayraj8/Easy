@@ -137,6 +137,46 @@ public class PdfToDocxLayoutTests(EngineFixture fx) : IClassFixture<EngineFixtur
             Assert.Equal(1, pages);
     }
 
+    /// <summary>
+    /// Easy: a page frame, a grey prompt box with a bar at its left, the rule under a heading and the frames around
+    /// screenshots were all dropped (only ruled tables kept their lines).
+    /// </summary>
+    [Fact]
+    public async Task Page_border_shaded_box_heading_rule_and_picture_frame_are_kept()
+    {
+        var folder = fx.NewFolder();
+        var pdf = new PdfBuilder().NewPage();
+        var font = pdf.Font();
+        pdf.Frame(20, 20, 555, 802, 1);
+        pdf.Line("Part A: Prompt design", 14, pdf.Font(bold: true), 60, 80);
+        pdf.Rule(60, 86, 536, 86, 0.75);
+        pdf.Line("Body text before the box.", 11, font, 60, 120);
+        pdf.Bar(60, 150, 476, 40, (243, 243, 243));
+        pdf.Bar(60, 150, 3, 40, (102, 102, 102));
+        pdf.Line("Explain how retrieval works in simple terms.", 10, font, 68, 165);
+        pdf.Line("Compare it with fine-tuning.", 10, font, 68, 180);
+        pdf.Line("Body text after the box.", 11, font, 60, 220);
+        pdf.Picture(PdfBuilder.Photo(folder, "shot.jpg", ImageMagick.MagickFormat.Jpeg), 60, 260, 300, 180);
+        pdf.Frame(60, 260, 300, 180);
+        pdf.Line("Figure 1: a screenshot.", 9, font, 150, 455);
+        var docx = await ToDocxAsync(pdf.Save(Path.Combine(folder, "decorated.pdf")));
+
+        using var zip = System.IO.Compression.ZipFile.OpenRead(docx);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var xml = await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
+        string Paragraph(string text) => xml.Split("</w:p>").Single(p => p.Contains(text, StringComparison.Ordinal));
+
+        Assert.Contains("<w:pgBorders", xml);
+        Assert.Contains("<w:bottom w:val=\"single\"", Paragraph("Part A"));
+        Assert.Contains("w:fill=\"F3F3F3\"", Paragraph("Explain how retrieval"));
+        Assert.Contains("<w:left w:val=\"single\"", Paragraph("Explain how retrieval"));
+        Assert.Contains("w:fill=\"F3F3F3\"", Paragraph("Compare it with")); // one box over both paragraphs
+        Assert.DoesNotContain("<w:pBdr>", Paragraph("Body text before"));
+        Assert.DoesNotContain("<w:pBdr>", Paragraph("Body text after"));
+        Assert.DoesNotContain("<w:pBdr>", Paragraph("Figure 1")); // the frame's edge is the picture's, not the caption's
+        Assert.Matches("<pic:spPr>.*<a:ln w=", xml);
+    }
+
     [Fact]
     public async Task A_page_full_of_lines_still_fits_on_one_page()
     {
